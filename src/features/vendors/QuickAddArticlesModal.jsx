@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Trash2, Printer } from 'lucide-react'
+import { Plus, Trash2, Printer, FileDown } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import Button from '../../components/ui/Button'
 import { Field, Input, Checkbox } from '../../components/ui/Field'
@@ -7,6 +7,7 @@ import { createArticle, getArticle, deleteArticle, markLabelPrinted } from '../.
 import { toast } from '../../store/useToastStore'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { padCode, formatMoney } from '../../lib/business'
+import { generateReceiptPdf } from '../../lib/invoicePdf'
 import LabelSheet from '../labels/LabelSheet'
 
 const emptyForm = { category: '', loadDate: new Date().toISOString().slice(0, 10), description: '', originalPrice: '', noDiscount: false }
@@ -72,6 +73,12 @@ export default function QuickAddArticlesModal({ open, onClose, vendor, onDone })
     onClose()
   }
 
+  function handlePrintReceipt() {
+    if (session.length === 0) return
+    const doc = generateReceiptPdf(vendor, session, settings)
+    doc.save(`distinta-ricevimento-${vendor.surname}-${new Date().toISOString().slice(0, 10)}.pdf`)
+  }
+
   const elements = { barcode: true, code: true, description: true, price: true, date: true, vendor: settings.hardware.showVendorOnLabel }
 
   return (
@@ -84,6 +91,9 @@ export default function QuickAddArticlesModal({ open, onClose, vendor, onDone })
         <>
           <Button variant="secondary" onClick={handleClose}>
             Chiudi
+          </Button>
+          <Button variant="secondary" onClick={handlePrintReceipt} disabled={session.length === 0}>
+            <FileDown size={16} /> Distinta di ricevimento
           </Button>
           <Button onClick={handlePrintAll} disabled={session.length === 0}>
             <Printer size={16} /> Stampa {session.length || ''} etichette

@@ -8,12 +8,14 @@ import Stat from '../../components/ui/Stat'
 import Card, { CardHeader } from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
+import Modal from '../../components/ui/Modal'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import { Field, Input, Textarea } from '../../components/ui/Field'
 import VendorForm from './VendorForm'
 import QuickAddArticlesModal from './QuickAddArticlesModal'
 import { formatMoney, formatDate, padCode, getArticleStatus, getCurrentPrice, ARTICLE_STATUS_COLORS, ARTICLE_STATUS_LABELS, invoiceLabel } from '../../lib/business'
 import { generateMandatePdf, DEFAULT_RECESSO_CLAUSE } from '../../lib/mandatePdf'
+import { generateReceiptPdf } from '../../lib/invoicePdf'
 import { buildWhatsAppLink, buildMailtoLink, vendorStatementMessage } from '../../lib/share'
 
 const TABS = ['Articoli', 'Mandato', 'Distinte', 'Contatta']
@@ -94,7 +96,8 @@ export default function VendorDetail() {
 
       {tab === 'Articoli' && (
         <div className="space-y-3">
-          <div className="flex justify-end">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <ReceiptButton vendor={vendor} settings={settings} />
             <Button size="sm" onClick={() => setQuickAddOpen(true)}>
               <Plus size={14} /> Aggiungi articoli
             </Button>
@@ -139,6 +142,53 @@ export default function VendorDetail() {
         onConfirm={handleDelete}
       />
     </div>
+  )
+}
+
+function ReceiptButton({ vendor, settings }) {
+  const today = new Date().toISOString().slice(0, 10)
+  const [open, setOpen] = useState(false)
+  const [from, setFrom] = useState(today)
+  const [to, setTo] = useState(today)
+
+  async function handleGenerate() {
+    const articles = await listArticles({ vendorId: vendor.id })
+    const loaded = articles.filter((a) => a.loadDate >= from && a.loadDate <= to)
+    if (loaded.length === 0) return toast('Nessun articolo caricato in questo periodo', 'info')
+    const doc = generateReceiptPdf(vendor, loaded, settings, { from, to })
+    doc.save(`distinta-ricevimento-${vendor.surname}-${from}-${to}.pdf`)
+    setOpen(false)
+  }
+
+  return (
+    <>
+      <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>
+        <FileDown size={14} /> Distinta di ricevimento
+      </Button>
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Distinta di ricevimento merce"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setOpen(false)}>
+              Annulla
+            </Button>
+            <Button onClick={handleGenerate}>Genera PDF</Button>
+          </>
+        }
+      >
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Carico dal">
+            <Input type="date" value={from} max={today} onChange={(e) => setFrom(e.target.value)} />
+          </Field>
+          <Field label="Al">
+            <Input type="date" value={to} max={today} onChange={(e) => setTo(e.target.value)} />
+          </Field>
+        </div>
+        <p className="mt-3 text-xs text-slate-400">Elenca gli articoli caricati in questo periodo, con il netto stimato alle condizioni attuali.</p>
+      </Modal>
+    </>
   )
 }
 

@@ -63,7 +63,7 @@ export default function Registro() {
 
   async function exportPDF() {
     const rows = await cashRegisterByVendor({ from: filters.from || undefined, to: filters.to || undefined })
-    const doc = generateCashSummaryPdf(rows, totals, filters.from || '–', filters.to || '–', settings)
+    const doc = generateCashSummaryPdf(rows, totals, filters.from || null, filters.to || null, settings)
     doc.save('riepilogo-cassa.pdf')
   }
 

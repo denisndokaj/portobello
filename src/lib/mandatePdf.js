@@ -1,4 +1,4 @@
-import { newDoc, pdfHeader, pdfFooter, pdfSignatureArea, MARGIN } from './pdf'
+import { newDoc, pdfHeader, pdfRecipientBlock, pdfFooter, pdfSignatureRow, MARGIN, MUTED, INK } from './pdf'
 import { formatDate } from './business'
 
 /** Builds the vendor's consignment mandate as a downloadable PDF. `params`
@@ -6,30 +6,36 @@ import { formatDate } from './business'
  * commission, withdrawal clause) without touching global settings. */
 export function generateMandatePdf(vendor, settings, params) {
   const doc = newDoc()
-  let y = pdfHeader(doc, settings, 'MANDATO DI VENDITA IN CONTO VENDITA', `${vendor.name} ${vendor.surname}`)
+  const today = formatDate(new Date().toISOString().slice(0, 10))
+  let y = pdfHeader(doc, settings, 'MANDATO DI VENDITA', { date: today, meta: ['Conto vendita'] })
 
-  doc.setFontSize(10)
-  const info = [
-    ['Venditore', `${vendor.name} ${vendor.surname}`],
-    ['Codice fiscale', vendor.cf || '–'],
-    ['Telefono', vendor.phone || '–'],
-    ['Indirizzo', vendor.address || '–'],
-    ['Data mandato', formatDate(new Date().toISOString().slice(0, 10))],
-    ['Durata', `${params.months} mesi`],
-    ['Commissione mercatino', `${params.commissionPercent}%`],
-  ]
-  info.forEach(([label, value], i) => {
-    doc.setFont(undefined, 'bold')
-    doc.text(label + ':', MARGIN, y + i * 6)
-    doc.setFont(undefined, 'normal')
-    doc.text(String(value), MARGIN + 50, y + i * 6)
+  y = pdfRecipientBlock(doc, y, {
+    name: `${vendor.name} ${vendor.surname}`,
+    lines: [vendor.cf ? `Codice fiscale: ${vendor.cf}` : null, vendor.phone ? `Telefono: ${vendor.phone}` : null, vendor.address || null].filter(Boolean),
   })
-  y += info.length * 6 + 8
 
-  doc.setFont(undefined, 'bold')
+  const info = [
+    ['Durata mandato', `${params.months} mesi dalla data di carico`],
+    ['Commissione mercatino', `${params.commissionPercent}% sul prezzo di vendita`],
+  ]
+  doc.setFontSize(9.3)
+  info.forEach(([label, value], i) => {
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(...MUTED)
+    doc.text(label, MARGIN, y + i * 6)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...INK)
+    doc.text(value, MARGIN + 55, y + i * 6)
+  })
+  y += info.length * 6 + 10
+
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(10)
+  doc.setTextColor(...INK)
   doc.text('Condizioni generali', MARGIN, y)
   y += 6
-  doc.setFont(undefined, 'normal')
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(9.3)
   const bodyText =
     `Il venditore affida al mercatino, a titolo di conto vendita, gli articoli elencati in allegato per un periodo massimo di ${params.months} mesi dalla data di carico. ` +
     `${settings.business.discountSteps.length ? 'Sono previsti sconti progressivi secondo lo scadenzario configurato dal negozio. ' : ''}` +
@@ -37,10 +43,9 @@ export function generateMandatePdf(vendor, settings, params) {
     `${params.recessoClause}`
   const lines = doc.splitTextToSize(bodyText, 210 - MARGIN * 2)
   doc.text(lines, MARGIN, y)
-  y += lines.length * 5 + 10
+  y += lines.length * 4.8 + 14
 
-  y = pdfSignatureArea(doc, y, `${settings.shop.name} (per accettazione)`)
-  y = pdfSignatureArea(doc, y + 4, 'Il venditore (per accettazione)')
+  pdfSignatureRow(doc, y, { label: settings.shop.name, sublabel: 'Per accettazione' }, { label: `${vendor.name} ${vendor.surname}`, sublabel: 'Per accettazione' })
 
   pdfFooter(doc, settings)
   return doc
