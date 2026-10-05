@@ -1,63 +1,48 @@
-import { newDoc, pdfHeader, pdfRecipientBlock, pdfSummary, pdfFooter, pdfSignatureRow, autoTable, MARGIN, INK, MUTED, FAINT_RULE, ACCENT } from './pdf'
-import { formatDate, formatMoney, padCode, invoiceLabel, calcNet, calcTax, commissionOf, splitNet, round2, contractText, PAYMENT_METHODS } from './business'
+import { newDoc, pdfLetterhead, pdfMetaRow, pdfTotals, pdfLabeledParagraph, pdfSingleSignature, pdfFooter, autoTable, MARGIN, PAGE_WIDTH, TABLE_STYLE } from './pdf'
+import { formatDate, formatMoney, padCode, invoiceLabel, calcNet, commissionOf, round2, contractText } from './business'
 
 /** Draws one sales settlement onto whatever page of `doc` is currently
  * active. Shared by the single-document and the bulk ("all this month's
- * settlements in one PDF") generators below. All the figures a vendor sees
- * here are already net of the shop's withholding tax - that's the whole
- * point of this document (contrast with the receipt below, which only
- * ever shows a pre-sale estimate). */
+ * settlements in one PDF") generators below. The price column is always
+ * the net, already-taxed figure - the vendor never needs to see the gross
+ * price, only what the shop actually owes them before the commission
+ * split, which is why "netto tassato" per line plus the three totals below
+ * (netto, provvigione, spettanza) are the whole story. */
 function drawInvoiceOnPage(doc, invoice, vendor, articles, settings) {
-  const methodLabel = PAYMENT_METHODS.find((m) => m.value === invoice.paidMethod)?.label
+  let y = pdfLetterhead(doc, settings, 'Distinta di vendita', `Periodo dal ${formatDate(invoice.from)} al ${formatDate(invoice.to)}`)
 
-  let y = pdfHeader(doc, settings, 'DISTINTA DI VENDITA', {
-    number: invoiceLabel(invoice, settings),
-    date: formatDate((invoice.issuedAt || '').slice(0, 10)),
-    meta: [`Periodo: ${formatDate(invoice.from)} – ${formatDate(invoice.to)}`],
+  y = pdfMetaRow(doc, y, {
+    left: ['Venditore', `${vendor.name} ${vendor.surname}`],
+    rightLines: [
+      ['Numero', invoiceLabel(invoice, settings)],
+      ['Data', formatDate((invoice.issuedAt || '').slice(0, 10))],
+      ['Stato', invoice.paid ? `Pagata il ${formatDate(invoice.paidDate)}` : 'Da liquidare'],
+    ],
   })
 
-  y = pdfRecipientBlock(doc, y, {
-    name: `${vendor.name} ${vendor.surname}`,
-    lines: [vendor.cf ? `Codice fiscale: ${vendor.cf}` : null, vendor.iban ? `IBAN: ${vendor.iban}` : null].filter(Boolean),
-  })
+  doc.setFontSize(9.3)
+  const introLines = doc.splitTextToSize("Con la presente si rendiconta la vendita dei seguenti articoli, a prezzi già al netto dell'imposta:", PAGE_WIDTH - MARGIN * 2)
+  doc.text(introLines, MARGIN, y)
+  y += introLines.length * 4.6 + 6
 
   autoTable(doc, {
     startY: y,
-    head: [['Codice', 'Descrizione', 'Data vendita', 'Prezzo lordo', 'Netto tassato', 'Spettanza']],
-    body: articles.map((a) => [padCode(a.code), a.description, formatDate(a.soldDate), formatMoney(a.soldPrice), formatMoney(a.soldNet), formatMoney(a.soldVendorShare)]),
-    styles: { fontSize: 8.2, textColor: INK, lineColor: FAINT_RULE, lineWidth: 0.2 },
-    headStyles: { fillColor: INK, textColor: 255, fontStyle: 'bold', fontSize: 8 },
-    alternateRowStyles: { fillColor: [248, 249, 250] },
-    columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right', fontStyle: 'bold' } },
+    head: [['N.', 'Codice', 'Descrizione', 'Data vendita', 'Prezzo netto']],
+    body: articles.map((a, i) => [String(i + 1), padCode(a.code), a.description, formatDate(a.soldDate), formatMoney(a.soldNet)]),
+    columnStyles: { 0: { cellWidth: 10 }, 4: { halign: 'right' } },
     margin: { left: MARGIN, right: MARGIN },
+    ...TABLE_STYLE,
   })
-  y = doc.lastAutoTable.finalY + 8
+  y = doc.lastAutoTable.finalY + 10
 
-  y = pdfSummary(
-    doc,
-    y,
-    [
-      ['Totale lordo', formatMoney(invoice.totalGross)],
-      ['Imposta trattenuta', formatMoney(invoice.totalTax)],
-      ['Totale netto tassato', formatMoney(invoice.totalNet)],
-      ['Quota mercatino', formatMoney(invoice.shopShare)],
-    ],
-    { highlightLabel: 'Spettanza netta venditore', highlightValue: formatMoney(invoice.vendorShare) },
-  )
+  y = pdfTotals(doc, y, [
+    { label: 'Totale netto tassato', value: formatMoney(invoice.totalNet) },
+    { label: 'Provvigione mercatino', value: formatMoney(invoice.shopShare) },
+    { label: 'Spettanza netta venditore', value: formatMoney(invoice.vendorShare), emphasis: true },
+  ])
 
-  doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9.5)
-  doc.setTextColor(...(invoice.paid ? ACCENT : [180, 83, 9]))
-  doc.text(invoice.paid ? `PAGATA il ${formatDate(invoice.paidDate)}${methodLabel ? ` · ${methodLabel}` : ''}` : 'DA LIQUIDARE', MARGIN, y)
-  doc.setTextColor(...INK)
-  y += 10
-
-  pdfSignatureRow(
-    doc,
-    y,
-    { label: settings.shop.name, sublabel: 'Per quietanza' },
-    { label: `${vendor.name} ${vendor.surname}`, sublabel: 'Per ricevuta', image: invoice.signature || null },
-  )
+  y += 6
+  pdfSingleSignature(doc, y, 'Firma del Venditore per ricevuta', invoice.signature)
 }
 
 export function generateInvoicePdf(invoice, vendor, articles, settings) {
@@ -67,9 +52,8 @@ export function generateInvoicePdf(invoice, vendor, articles, settings) {
   return doc
 }
 
-/** One combined PDF with every settlement, one per page (or more if a
- * vendor's table overflows) - for "print all of this month's distinte at
- * once". `items` is [{ invoice, vendor, articles }]. */
+/** One combined PDF with every settlement, one per page - for "print all
+ * of this month's distinte at once". `items` is [{ invoice, vendor, articles }]. */
 export function generateBulkInvoicePdf(items, settings) {
   const doc = newDoc()
   items.forEach((item, i) => {
@@ -81,92 +65,55 @@ export function generateBulkInvoicePdf(items, settings) {
 }
 
 /** "Distinta di ricevimento merce": issued to whoever just dropped off
- * items, listing what was loaded at listino price plus a *projected*
- * net/commission split computed from current settings - clearly labelled
- * as an estimate, since the real figures are only fixed at actual sale
- * time (discounts, price overrides, a later mandate change can all move
- * them). This is never persisted as a ledger document the way a sales
- * settlement is: it's a point-in-time printout of already-stored articles. */
+ * items, listing what was loaded with its already-taxed net value at
+ * today's settings - a projection, since discounts, a price override or a
+ * later mandate change can still move it before the actual sale. Never
+ * persisted as a ledger document the way a sales settlement is: it's a
+ * point-in-time printout of already-stored articles. */
 export function generateReceiptPdf(vendor, articles, settings, period) {
   const doc = newDoc()
   const commission = commissionOf(vendor, settings)
-  const rows = articles.map((a) => {
-    const net = calcNet(a.originalPrice, vendor, settings)
-    const tax = calcTax(a.originalPrice, vendor, settings)
-    const { vendorShare } = splitNet(net, commission)
-    return { a, net, tax, vendorShare }
+  const rows = articles.map((a) => ({ a, net: calcNet(a.originalPrice, vendor, settings) }))
+  const totalNet = round2(rows.reduce((s, r) => s + r.net, 0))
+
+  const dateLabel = period ? `dal ${formatDate(period.from)} al ${formatDate(period.to)}` : `in data ${formatDate(new Date().toISOString().slice(0, 10))}`
+  let y = pdfLetterhead(doc, settings, 'Distinta di ricevimento merce', `Articoli ricevuti ${dateLabel}`)
+
+  y = pdfMetaRow(doc, y, {
+    left: ['Venditore', `${vendor.name} ${vendor.surname}`],
+    rightLines: [
+      ['Data', formatDate(new Date().toISOString().slice(0, 10))],
+      ['Commissione', `${commission}%`],
+      ['N. articoli', String(articles.length)],
+    ],
   })
-  const totals = rows.reduce(
-    (acc, r) => ({
-      listino: round2(acc.listino + r.a.originalPrice),
-      netto: round2(acc.netto + r.net),
-      tax: round2(acc.tax + r.tax),
-      spettanza: round2(acc.spettanza + r.vendorShare),
-    }),
-    { listino: 0, netto: 0, tax: 0, spettanza: 0 },
+
+  doc.setFontSize(9.3)
+  const introLines = doc.splitTextToSize(
+    "Con la presente si dichiara di aver ricevuto in conto vendita i seguenti articoli, a prezzi già al netto dell'imposta:",
+    PAGE_WIDTH - MARGIN * 2,
   )
-
-  let y = pdfHeader(doc, settings, 'DISTINTA DI RICEVIMENTO', {
-    date: formatDate(new Date().toISOString().slice(0, 10)),
-    meta: period ? [`Carico: ${formatDate(period.from)} – ${formatDate(period.to)}`] : undefined,
-  })
-
-  y = pdfRecipientBlock(doc, y, {
-    name: `${vendor.name} ${vendor.surname}`,
-    lines: [vendor.cf ? `Codice fiscale: ${vendor.cf}` : null, vendor.phone ? `Telefono: ${vendor.phone}` : null].filter(Boolean),
-  })
+  doc.text(introLines, MARGIN, y)
+  y += introLines.length * 4.6 + 6
 
   autoTable(doc, {
     startY: y,
-    head: [['Codice', 'Descrizione', 'Data carico', 'Prezzo listino', 'Netto tassato stimato', 'Spettanza stimata']],
-    body: rows.map((r) => [padCode(r.a.code), r.a.description, formatDate(r.a.loadDate), formatMoney(r.a.originalPrice), formatMoney(r.net), formatMoney(r.vendorShare)]),
-    styles: { fontSize: 8.2, textColor: INK, lineColor: FAINT_RULE, lineWidth: 0.2 },
-    headStyles: { fillColor: INK, textColor: 255, fontStyle: 'bold', fontSize: 8 },
-    alternateRowStyles: { fillColor: [248, 249, 250] },
-    columnStyles: { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right', fontStyle: 'bold' } },
+    head: [['N.', 'Codice', 'Descrizione', 'Data carico', 'Prezzo netto']],
+    body: rows.map((r, i) => [String(i + 1), padCode(r.a.code), r.a.description, formatDate(r.a.loadDate), formatMoney(r.net)]),
+    columnStyles: { 0: { cellWidth: 10 }, 4: { halign: 'right' } },
     margin: { left: MARGIN, right: MARGIN },
+    ...TABLE_STYLE,
   })
-  y = doc.lastAutoTable.finalY + 8
+  y = doc.lastAutoTable.finalY + 10
 
-  y = pdfSummary(
-    doc,
-    y,
-    [
-      ['Totale a listino', formatMoney(totals.listino)],
-      ['Imposta stimata', formatMoney(totals.tax)],
-      [`Quota mercatino stimata (${commission}%)`, formatMoney(round2(totals.netto - totals.spettanza))],
-    ],
-    { highlightLabel: 'Spettanza stimata venditore', highlightValue: formatMoney(totals.spettanza) },
-  )
-
-  doc.setFont('helvetica', 'italic')
-  doc.setFontSize(7.8)
-  doc.setTextColor(...MUTED)
-  const disclaimer = doc.splitTextToSize(
-    'Gli importi di netto e spettanza indicati sono una stima calcolata sul prezzo di listino alle condizioni attuali (provvigione e imposta). ' +
-      'Gli importi effettivi saranno definiti al momento della vendita e potranno variare per sconti progressivi, rettifiche di prezzo o modifiche del mandato.',
-    210 - MARGIN * 2,
-  )
-  doc.text(disclaimer, MARGIN, y)
-  y += disclaimer.length * 3.6 + 8
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(...INK)
+  y = pdfTotals(doc, y, [{ label: 'Totale netto merce', value: formatMoney(totalNet), emphasis: true }])
 
   if (settings.business.contractTerms) {
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9.5)
-    doc.text('Condizioni di conferimento', MARGIN, y)
-    y += 5.5
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(8.3)
-    doc.setTextColor(...MUTED)
-    const terms = doc.splitTextToSize(contractText(settings), 210 - MARGIN * 2)
-    doc.text(terms, MARGIN, y)
-    y += terms.length * 4.2 + 10
-    doc.setTextColor(...INK)
+    y = pdfLabeledParagraph(doc, y, 'Condizioni:', contractText(settings))
   }
 
-  pdfSignatureRow(doc, y, { label: settings.shop.name, sublabel: 'Per ricevuta merce' }, { label: `${vendor.name} ${vendor.surname}`, sublabel: 'Il conferente' })
+  y += 6
+  pdfSingleSignature(doc, y, 'Firma del Venditore')
 
   pdfFooter(doc, settings)
   return doc
@@ -174,23 +121,24 @@ export function generateReceiptPdf(vendor, articles, settings, period) {
 
 export function generateCashSummaryPdf(rows, totals, from, to, settings) {
   const doc = newDoc()
-  const periodMeta = from && to ? [`Periodo: ${formatDate(from)} – ${formatDate(to)}`] : ['Tutto lo storico']
-  let y = pdfHeader(doc, settings, 'RIEPILOGO DI CASSA', { date: formatDate(new Date().toISOString().slice(0, 10)), meta: periodMeta })
+  const period = from && to ? `Periodo dal ${formatDate(from)} al ${formatDate(to)}` : 'Tutto lo storico'
+  let y = pdfLetterhead(doc, settings, 'Riepilogo di cassa', period)
 
   autoTable(doc, {
     startY: y,
-    head: [['Venditore', 'N. vendite', 'Lordo', 'Imposta', 'Quota mercatino', 'Spettanza venditori']],
+    head: [['Venditore', 'N. vendite', 'Lordo', 'Imposta', 'Provvigione mercatino', 'Spettanza venditori']],
     body: rows.map((r) => [r.vendorName, r.count, formatMoney(r.gross), formatMoney(r.tax), formatMoney(r.shopShare), formatMoney(r.vendorShare)]),
     foot: [['TOTALE', totals.count, formatMoney(totals.gross), formatMoney(totals.tax), formatMoney(totals.shopShare), formatMoney(totals.vendorShare)]],
-    styles: { fontSize: 8.2, textColor: INK, lineColor: FAINT_RULE, lineWidth: 0.2 },
-    headStyles: { fillColor: INK, textColor: 255, fontStyle: 'bold', fontSize: 8 },
-    footStyles: { fillColor: [241, 245, 249], textColor: INK, fontStyle: 'bold' },
-    alternateRowStyles: { fillColor: [248, 249, 250] },
+    footStyles: { fillColor: 255, textColor: [20, 21, 24], fontStyle: 'bold', lineColor: [20, 21, 24], lineWidth: 0.3 },
     margin: { left: MARGIN, right: MARGIN },
+    ...TABLE_STYLE,
   })
 
   y = doc.lastAutoTable.finalY + 10
-  pdfSummary(doc, y, [['di cui imposta trattenuta', formatMoney(totals.tax)]], { highlightLabel: 'Incasso totale mercatino', highlightValue: formatMoney(totals.shopShare + totals.tax) })
+  pdfTotals(doc, y, [
+    { label: 'di cui imposta trattenuta', value: formatMoney(totals.tax) },
+    { label: 'Incasso totale mercatino', value: formatMoney(totals.shopShare + totals.tax), emphasis: true },
+  ])
 
   pdfFooter(doc, settings)
   return doc
