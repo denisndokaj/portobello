@@ -5,12 +5,16 @@ import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Relative base: the build can be dropped at the domain root, under a
+  // sub-path (e.g. GitHub Pages' /portobello/), or opened straight from
+  // disk, with no extra configuration.
+  base: './',
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icons/*.png'],
+      includeAssets: ['icons/*.png', 'apple-touch-icon.png'],
       manifest: {
         name: 'Portobello Gestionale',
         short_name: 'Portobello',
@@ -19,12 +23,12 @@ export default defineConfig({
         background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait',
-        start_url: '/',
-        scope: '/',
+        start_url: '.',
+        scope: '.',
         icons: [
-          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {
