@@ -1,5 +1,6 @@
 import { forwardRef } from 'react'
 import clsx from 'clsx'
+import { twMerge } from 'tailwind-merge'
 
 const baseInput =
   'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none transition disabled:bg-slate-50 disabled:text-slate-400'
@@ -16,16 +17,16 @@ export function Field({ label, hint, error, children, className }) {
 }
 
 export const Input = forwardRef(function Input({ className, ...props }, ref) {
-  return <input ref={ref} className={clsx(baseInput, className)} {...props} />
+  return <input ref={ref} className={twMerge(baseInput, className)} {...props} />
 })
 
 export const Textarea = forwardRef(function Textarea({ className, ...props }, ref) {
-  return <textarea ref={ref} className={clsx(baseInput, 'min-h-20', className)} {...props} />
+  return <textarea ref={ref} className={twMerge(baseInput, 'min-h-20', className)} {...props} />
 })
 
 export const Select = forwardRef(function Select({ className, children, ...props }, ref) {
   return (
-    <select ref={ref} className={clsx(baseInput, 'pr-8', className)} {...props}>
+    <select ref={ref} className={twMerge(baseInput, 'pr-8', className)} {...props}>
       {children}
     </select>
   )
