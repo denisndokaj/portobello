@@ -5,15 +5,15 @@ import { LABEL_PRESETS } from '../../lib/business'
 /** Printable sheet: one div per selected article sized to the configured
  * label format in millimetres, so the browser print dialog maps 1:1 to the
  * physical label when "Scale: 100%" / "Actual size" is selected. */
-export default function LabelSheet({ articles, vendorMap, settings, elements }) {
+export default function LabelSheet({ articles, vendorMap, settings, elements, priceMode = 'current' }) {
   const preset = LABEL_PRESETS[settings.hardware.labelPrinterFormat] || LABEL_PRESETS['DK-11201']
 
   return (
     <div className="print-area hidden flex-wrap gap-2 print:flex">
       {articles.map((a) => {
         const vendor = vendorMap[a.vendorId]
-        const price = getCurrentPrice(a, settings)
-        const discounted = price < a.originalPrice
+        const price = priceMode === 'full' ? a.originalPrice : getCurrentPrice(a, settings)
+        const discounted = priceMode === 'current' && price < a.originalPrice
         return (
           <div
             key={a.id}

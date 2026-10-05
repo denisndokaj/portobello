@@ -26,15 +26,20 @@ function totalsFor(articles) {
  * unpaid settlement recomputes totals (new sales in the same range are
  * picked up); a paid settlement is immutable. */
 export async function getOrCreateInvoice(vendorId, from, to) {
-  return db.transaction('rw', db.invoices, db.vendors, db.counters, async () => {
+  // Logging happens *outside* the transaction below: addLog() writes to
+  // db.logs, a table this transaction never declares, so calling it from
+  // inside used to throw (Dexie scopes a transaction strictly to the
+  // tables it's given - touching any other table from inside it fails
+  // with "the specified object store was not found").
+  const { invoice, created } = await db.transaction('rw', db.invoices, db.vendors, db.counters, db.articles, async () => {
     const articles = await soldArticlesInPeriod(vendorId, from, to)
     const totals = totalsFor(articles)
     const existing = await db.invoices.where({ vendorId: Number(vendorId) }).and((i) => i.from === from && i.to === to).first()
 
     if (existing) {
-      if (existing.paid) return existing
+      if (existing.paid) return { invoice: existing, created: false }
       await db.invoices.update(existing.id, totals)
-      return { ...existing, ...totals }
+      return { invoice: { ...existing, ...totals }, created: false }
     }
 
     const vendor = await db.vendors.get(Number(vendorId))
@@ -43,7 +48,7 @@ export async function getOrCreateInvoice(vendorId, from, to) {
     const number = numbered ? counters.nextInvoiceNumber : counters.nextUnnumberedNumber
     await db.counters.update(1, numbered ? { nextInvoiceNumber: number + 1 } : { nextUnnumberedNumber: number + 1 })
 
-    const invoice = {
+    const newInvoice = {
       vendorId: Number(vendorId),
       from,
       to,
@@ -56,10 +61,33 @@ export async function getOrCreateInvoice(vendorId, from, to) {
       paidNote: null,
       ...totals,
     }
-    const id = await db.invoices.add(invoice)
-    await addLog('distinta_emessa', `Distinta emessa per venditore #${vendorId} (${from} – ${to})`, { vendorId: Number(vendorId) })
-    return { id, ...invoice }
+    const id = await db.invoices.add(newInvoice)
+    return { invoice: { id, ...newInvoice }, created: true }
   })
+
+  if (created) {
+    await addLog('distinta_emessa', `Distinta emessa per venditore #${vendorId} (${from} – ${to})`, { vendorId: Number(vendorId) })
+  }
+  return invoice
+}
+
+/** Vendor ids with at least one sale in the period - the set a "generate
+ * this month's settlements" bulk action should cover, no more. */
+export async function vendorsWithSalesInPeriod(from, to) {
+  const sold = await db.articles.where('status').equals('venduto').toArray()
+  const ids = sold.filter((a) => a.vendorId && a.soldDate >= from && a.soldDate <= to).map((a) => a.vendorId)
+  return [...new Set(ids)]
+}
+
+/** Generates/refreshes the settlement for every vendor who sold something
+ * in the period, skipping anyone with nothing to settle. */
+export async function generateMonthlyInvoices(from, to) {
+  const vendorIds = await vendorsWithSalesInPeriod(from, to)
+  const invoices = []
+  for (const vendorId of vendorIds) {
+    invoices.push(await getOrCreateInvoice(vendorId, from, to))
+  }
+  return invoices
 }
 
 export async function listInvoices(filters = {}) {

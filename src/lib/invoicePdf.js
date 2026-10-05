@@ -1,8 +1,10 @@
 import { newDoc, pdfHeader, pdfFooter, pdfSignatureArea, pdfSignatureImage, autoTable, MARGIN } from './pdf'
 import { formatDate, formatMoney, padCode, invoiceLabel } from './business'
 
-export function generateInvoicePdf(invoice, vendor, articles, settings) {
-  const doc = newDoc()
+/** Draws one settlement onto whatever page of `doc` is currently active.
+ * Shared by the single-document and the bulk ("all this month's
+ * settlements in one PDF") generators below. */
+function drawInvoiceOnPage(doc, invoice, vendor, articles, settings) {
   let y = pdfHeader(doc, settings, `DISTINTA DI VENDITA N. ${invoiceLabel(invoice, settings)}`, `${vendor.name} ${vendor.surname} – ${formatDate(invoice.from)} – ${formatDate(invoice.to)}`)
 
   autoTable(doc, {
@@ -48,7 +50,24 @@ export function generateInvoicePdf(invoice, vendor, articles, settings) {
   } else {
     pdfSignatureArea(doc, y, 'Firma per ricevuta')
   }
+}
 
+export function generateInvoicePdf(invoice, vendor, articles, settings) {
+  const doc = newDoc()
+  drawInvoiceOnPage(doc, invoice, vendor, articles, settings)
+  pdfFooter(doc, settings)
+  return doc
+}
+
+/** One combined PDF with every settlement, one per page (or more if a
+ * vendor's table overflows) - for "print all of this month's distinte at
+ * once". `items` is [{ invoice, vendor, articles }]. */
+export function generateBulkInvoicePdf(items, settings) {
+  const doc = newDoc()
+  items.forEach((item, i) => {
+    if (i > 0) doc.addPage()
+    drawInvoiceOnPage(doc, item.invoice, item.vendor, item.articles, settings)
+  })
   pdfFooter(doc, settings)
   return doc
 }

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FileText, Plus, Download, FileDown, Wallet, Ban } from 'lucide-react'
-import { listInvoices, listVendors, getOrCreateInvoice, getInvoiceArticles, cancelPayment } from '../../services'
+import { FileText, Plus, Download, FileDown, Wallet, Ban, Printer } from 'lucide-react'
+import { listInvoices, listVendors, getOrCreateInvoice, getInvoiceArticles, cancelPayment, vendorsWithSalesInPeriod, generateMonthlyInvoices } from '../../services'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { toast } from '../../store/useToastStore'
-import Card from '../../components/ui/Card'
+import Card, { CardHeader } from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import Badge from '../../components/ui/Badge'
 import Stat from '../../components/ui/Stat'
@@ -13,8 +13,16 @@ import VendorPicker from '../../components/VendorPicker'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import PayModal from './PayModal'
 import { formatMoney, formatDate, invoiceLabel, round2 } from '../../lib/business'
-import { generateInvoicePdf } from '../../lib/invoicePdf'
+import { generateInvoicePdf, generateBulkInvoicePdf } from '../../lib/invoicePdf'
 import { downloadCSV } from '../../lib/exportUtils'
+
+function monthBounds(monthStr) {
+  const [year, month] = monthStr.split('-').map(Number)
+  const from = `${monthStr}-01`
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  const to = `${monthStr}-${String(lastDay).padStart(2, '0')}`
+  return { from, to }
+}
 
 export default function SettlementList() {
   const settings = useSettingsStore((s) => s.settings)
@@ -24,6 +32,8 @@ export default function SettlementList() {
   const [newOpen, setNewOpen] = useState(false)
   const [payTarget, setPayTarget] = useState(null)
   const [cancelTarget, setCancelTarget] = useState(null)
+  const [bulkMonth, setBulkMonth] = useState(new Date().toISOString().slice(0, 7))
+  const [bulkBusy, setBulkBusy] = useState(false)
 
   async function reload() {
     setInvoices(await listInvoices())
@@ -51,6 +61,37 @@ export default function SettlementList() {
     const articles = await getInvoiceArticles(invoice)
     const doc = generateInvoicePdf(invoice, vendor, articles, settings)
     doc.save(`distinta-${invoiceLabel(invoice, settings)}.pdf`)
+  }
+
+  const [bulkCount, setBulkCount] = useState(0)
+  useEffect(() => {
+    const { from, to } = monthBounds(bulkMonth)
+    vendorsWithSalesInPeriod(from, to).then((ids) => setBulkCount(ids.length))
+  }, [bulkMonth, invoices])
+
+  async function handleBulkGenerate() {
+    const { from, to } = monthBounds(bulkMonth)
+    setBulkBusy(true)
+    try {
+      const monthInvoices = await generateMonthlyInvoices(from, to)
+      if (monthInvoices.length === 0) {
+        toast('Nessuna vendita in questo mese', 'info')
+        return
+      }
+      const allVendors = await listVendors()
+      const freshVendorMap = Object.fromEntries(allVendors.map((v) => [v.id, v]))
+      const items = []
+      for (const invoice of monthInvoices) {
+        const articles = await getInvoiceArticles(invoice)
+        items.push({ invoice, vendor: freshVendorMap[invoice.vendorId], articles })
+      }
+      const doc = generateBulkInvoicePdf(items, settings)
+      doc.save(`distinte-${bulkMonth}.pdf`)
+      toast(`${items.length} distinte generate e pronte per la stampa`, 'success')
+      reload()
+    } finally {
+      setBulkBusy(false)
+    }
   }
 
   async function handleCancelPayment() {
@@ -94,6 +135,17 @@ export default function SettlementList() {
         <Stat label="Liquidato storico" value={formatMoney(totals.paid)} tone="text-brand-700" />
         <Stat label="Distinte aperte" value={totals.openCount} />
       </div>
+
+      <Card>
+        <CardHeader title="Distinte del mese" subtitle="Genera e stampa in un colpo solo tutte le distinte dei venditori che hanno venduto qualcosa nel mese scelto" />
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <Input type="month" className="w-44" value={bulkMonth} onChange={(e) => setBulkMonth(e.target.value)} />
+          <span className="text-sm text-slate-500">{bulkCount} venditori con vendite nel mese</span>
+          <Button className="ml-auto" onClick={handleBulkGenerate} disabled={bulkBusy || bulkCount === 0}>
+            <Printer size={16} /> Genera e stampa tutte
+          </Button>
+        </div>
+      </Card>
 
       <div className="flex gap-1 border-b border-slate-200">
         {[

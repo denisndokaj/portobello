@@ -190,6 +190,7 @@ export const LOG_TYPE_LABELS = {
   impostazioni_modificate: 'Impostazioni modificate',
   dati_importati: 'Dati importati',
   cassa_chiusura: 'Chiusura cassa',
+  acconto_registrato: 'Acconto',
 }
 
 export const PAYMENT_METHODS = [

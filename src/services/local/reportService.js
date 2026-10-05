@@ -118,10 +118,5 @@ export async function cashRegisterTotals({ from, to } = {}) {
   const tax = round2(sold.reduce((s, a) => s + (a.soldTax || 0), 0))
   const shopShare = round2(sold.reduce((s, a) => s + (a.soldShopShare || 0), 0))
   const vendorShare = round2(sold.reduce((s, a) => s + (a.soldVendorShare || 0), 0))
-  const byMethod = {}
-  for (const a of sold) {
-    const m = a.paymentMethod || 'contanti'
-    byMethod[m] = round2((byMethod[m] || 0) + (a.soldPrice || 0))
-  }
-  return { count: sold.length, gross, tax, shopShare, vendorShare, shopIncome: round2(shopShare + tax), byMethod }
+  return { count: sold.length, gross, tax, shopShare, vendorShare, shopIncome: round2(shopShare + tax) }
 }

@@ -6,15 +6,15 @@ import { toast } from '../../store/useToastStore'
 import { useCartStore } from '../../store/useCartStore'
 import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
-import { Input, Select } from '../../components/ui/Field'
+import { Input } from '../../components/ui/Field'
 import NumericKeypad from '../../components/NumericKeypad'
 import BarcodeScannerModal from '../../components/BarcodeScannerModal'
 import Receipt from './Receipt'
-import { formatMoney, padCode, getArticleStatus, getCurrentPrice, PAYMENT_METHODS } from '../../lib/business'
+import { formatMoney, padCode, getArticleStatus, getCurrentPrice } from '../../lib/business'
 
 export default function Pos() {
   const settings = useSettingsStore((s) => s.settings)
-  const { lines, paymentMethod, addLine, updatePrice, removeLine, setPaymentMethod, clear, total } = useCartStore()
+  const { lines, addLine, updatePrice, removeLine, clear, total } = useCartStore()
   const [code, setCode] = useState('')
   const [scannerOpen, setScannerOpen] = useState(false)
   const [session, setSession] = useState([])
@@ -43,10 +43,10 @@ export default function Pos() {
     const date = new Date().toISOString().slice(0, 10)
     const sold = []
     for (const line of lines) {
-      await sellArticle(line.article.id, { price: Number(line.price), date, paymentMethod })
+      await sellArticle(line.article.id, { price: Number(line.price), date })
       sold.push({ article: line.article, price: Number(line.price) })
     }
-    const sale = { date: new Date().toISOString(), method: paymentMethod, lines: sold, total: sold.reduce((s, l) => s + l.price, 0) }
+    const sale = { date: new Date().toISOString(), lines: sold, total: sold.reduce((s, l) => s + l.price, 0) }
     setSession((s) => [sale, ...s])
     setLastReceipt(sale)
     clear()
@@ -122,16 +122,6 @@ export default function Pos() {
           </div>
         )}
         <div className="space-y-3 border-t border-slate-100 p-4">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-500">Metodo di pagamento</span>
-            <Select className="w-40" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-              {PAYMENT_METHODS.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </Select>
-          </div>
           <div className="flex items-center justify-between text-lg font-semibold">
             <span>Totale</span>
             <span className="tabular-nums">{formatMoney(total())}</span>

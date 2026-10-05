@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Pencil, Trash2, FileDown, MessageCircle, Mail, Wallet } from 'lucide-react'
+import { ArrowLeft, Pencil, Trash2, FileDown, MessageCircle, Mail, Wallet, Plus } from 'lucide-react'
 import { getVendor, vendorStats, deleteVendor, listArticles, listInvoices, getOrCreateInvoice } from '../../services'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { toast } from '../../store/useToastStore'
@@ -11,6 +11,7 @@ import Badge from '../../components/ui/Badge'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import { Field, Input, Textarea } from '../../components/ui/Field'
 import VendorForm from './VendorForm'
+import QuickAddArticlesModal from './QuickAddArticlesModal'
 import { formatMoney, formatDate, padCode, getArticleStatus, getCurrentPrice, ARTICLE_STATUS_COLORS, ARTICLE_STATUS_LABELS, invoiceLabel } from '../../lib/business'
 import { generateMandatePdf, DEFAULT_RECESSO_CLAUSE } from '../../lib/mandatePdf'
 import { buildWhatsAppLink, buildMailtoLink, vendorStatementMessage } from '../../lib/share'
@@ -28,6 +29,7 @@ export default function VendorDetail() {
   const [tab, setTab] = useState('Articoli')
   const [editOpen, setEditOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [quickAddOpen, setQuickAddOpen] = useState(false)
 
   async function reload() {
     const [v, s, a, inv] = await Promise.all([getVendor(id), vendorStats(id), listArticles({ vendorId: id }), listInvoices({ vendorId: id })])
@@ -91,8 +93,14 @@ export default function VendorDetail() {
       </div>
 
       {tab === 'Articoli' && (
-        <Card className="divide-y divide-slate-100 overflow-hidden">
-          {articles.length === 0 && <p className="p-4 text-sm text-slate-400">Nessun articolo per questo venditore.</p>}
+        <div className="space-y-3">
+          <div className="flex justify-end">
+            <Button size="sm" onClick={() => setQuickAddOpen(true)}>
+              <Plus size={14} /> Aggiungi articoli
+            </Button>
+          </div>
+          <Card className="divide-y divide-slate-100 overflow-hidden">
+            {articles.length === 0 && <p className="p-4 text-sm text-slate-400">Nessun articolo per questo venditore.</p>}
           {articles.map((a) => {
             const st = getArticleStatus(a, settings)
             return (
@@ -110,7 +118,8 @@ export default function VendorDetail() {
               </div>
             )
           })}
-        </Card>
+          </Card>
+        </div>
       )}
 
       {tab === 'Mandato' && <MandateTab vendor={vendor} settings={settings} />}
@@ -120,6 +129,7 @@ export default function VendorDetail() {
       {tab === 'Contatta' && <ContactTab vendor={vendor} stats={stats} settings={settings} />}
 
       <VendorForm open={editOpen} onClose={() => setEditOpen(false)} vendor={vendor} onSaved={reload} />
+      <QuickAddArticlesModal open={quickAddOpen} onClose={() => setQuickAddOpen(false)} vendor={vendor} onDone={reload} />
       <ConfirmDialog
         open={confirmDelete}
         title="Elimina venditore"

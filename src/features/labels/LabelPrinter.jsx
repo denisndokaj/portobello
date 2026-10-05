@@ -12,7 +12,7 @@ import LabelSheet from './LabelSheet'
 import { padCode, formatMoney, formatDate, getCurrentPrice, LABEL_PRESETS } from '../../lib/business'
 import { downloadCSV } from '../../lib/exportUtils'
 
-const DEFAULT_ELEMENTS = { barcode: true, code: true, description: true, price: true, date: false, vendor: false }
+const DEFAULT_ELEMENTS = { barcode: true, code: true, description: true, price: true, date: true, vendor: false }
 
 export default function LabelPrinter() {
   const settings = useSettingsStore((s) => s.settings)
@@ -22,6 +22,7 @@ export default function LabelPrinter() {
   const [selected, setSelected] = useState({})
   const [elements, setElements] = useState({ ...DEFAULT_ELEMENTS, vendor: settings.hardware.showVendorOnLabel })
   const [format, setFormat] = useState(settings.hardware.labelPrinterFormat)
+  const [priceMode, setPriceMode] = useState('current')
   const [params] = useSearchParams()
 
   async function reload() {
@@ -112,6 +113,14 @@ export default function LabelPrinter() {
           ))}
         </div>
 
+        <div className="flex items-center gap-4 border-t border-slate-100 pt-3">
+          <span className="text-sm font-medium text-slate-500">Prezzo in etichetta</span>
+          <Select className="w-56" value={priceMode} onChange={(e) => setPriceMode(e.target.value)}>
+            <option value="current">Prezzo corrente (con sconto se attivo)</option>
+            <option value="full">Sempre prezzo pieno</option>
+          </Select>
+        </div>
+
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
           <Button variant="secondary" size="sm" onClick={() => toggleAll(true)}>
             Seleziona tutti ({filtered.length})
@@ -141,7 +150,13 @@ export default function LabelPrinter() {
         ))}
       </Card>
 
-      <LabelSheet articles={selectedArticles} vendorMap={vendorMap} settings={{ ...settings, hardware: { ...settings.hardware, labelPrinterFormat: format } }} elements={elements} />
+      <LabelSheet
+        articles={selectedArticles}
+        vendorMap={vendorMap}
+        settings={{ ...settings, hardware: { ...settings.hardware, labelPrinterFormat: format } }}
+        elements={elements}
+        priceMode={priceMode}
+      />
     </div>
   )
 }

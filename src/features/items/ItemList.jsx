@@ -13,6 +13,7 @@ import {
   CalendarClock,
   Package,
   AlertTriangle,
+  Coins,
 } from 'lucide-react'
 import { listArticles, listCategories, cancelSale, revertRitiro, deleteArticle, extendMandate, getArticleByCode } from '../../services'
 import { useSettingsStore } from '../../store/useSettingsStore'
@@ -28,6 +29,7 @@ import BarcodeScannerModal from '../../components/BarcodeScannerModal'
 import ItemForm from './ItemForm'
 import SellModal from './SellModal'
 import RitiroModal from './RitiroModal'
+import DepositModal from './DepositModal'
 import { formatMoney, formatDate, padCode, getArticleStatus, getCurrentPrice, ARTICLE_STATUS_COLORS, ARTICLE_STATUS_LABELS, getExpiringArticles } from '../../lib/business'
 
 const PAGE_SIZE = 150
@@ -43,6 +45,7 @@ export default function ItemList() {
   const [editArticle, setEditArticle] = useState(null)
   const [sellArticleTarget, setSellArticleTarget] = useState(null)
   const [ritiroTarget, setRitiroTarget] = useState(null)
+  const [depositTarget, setDepositTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [scannerOpen, setScannerOpen] = useState(false)
   const [params, setParams] = useSearchParams()
@@ -216,7 +219,10 @@ export default function ItemList() {
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
-                    <Badge tone={ARTICLE_STATUS_COLORS[st.status]}>{st.label}</Badge>
+                    <div className="flex items-center justify-end gap-1.5">
+                      {a.depositAmount > 0 && <Badge tone="bg-purple-100 text-purple-700">Acconto {formatMoney(a.depositAmount)}</Badge>}
+                      <Badge tone={ARTICLE_STATUS_COLORS[st.status]}>{st.label}</Badge>
+                    </div>
                     <p className="mt-1 text-sm font-semibold tabular-nums text-slate-800">{formatMoney(getCurrentPrice(a, settings))}</p>
                   </div>
                 </div>
@@ -227,6 +233,9 @@ export default function ItemList() {
                   {st.status === 'venduto' && <RowAction icon={Undo2} label="Annulla vendita" onClick={() => handleCancelSale(a)} />}
                   {(st.status === 'disponibile' || st.status === 'sconto' || st.status === 'scaduto') && (
                     <RowAction icon={RotateCcw} label="Ritira/Rendi" onClick={() => setRitiroTarget(a)} />
+                  )}
+                  {(st.status === 'disponibile' || st.status === 'sconto' || st.status === 'scaduto') && (
+                    <RowAction icon={Coins} label={a.depositAmount > 0 ? `Acconto ${formatMoney(a.depositAmount)}` : 'Acconto'} onClick={() => setDepositTarget(a)} />
                   )}
                   {st.status === 'scaduto' && <RowAction icon={CalendarClock} label="Proroga 30gg" onClick={() => handleExtend(a)} />}
                   {(st.status === 'ritirato' || st.status === 'reso' || st.status === 'devoluto') && (
@@ -266,6 +275,7 @@ export default function ItemList() {
       <ItemForm open={formOpen} onClose={() => setFormOpen(false)} article={editArticle} onSaved={reload} />
       <SellModal open={!!sellArticleTarget} article={sellArticleTarget} onClose={() => setSellArticleTarget(null)} onSold={reload} />
       <RitiroModal open={!!ritiroTarget} article={ritiroTarget} onClose={() => setRitiroTarget(null)} onDone={reload} />
+      <DepositModal open={!!depositTarget} article={depositTarget} onClose={() => setDepositTarget(null)} onSaved={reload} />
       <BarcodeScannerModal open={scannerOpen} onClose={() => setScannerOpen(false)} onResult={handleScan} />
       <ConfirmDialog
         open={!!deleteTarget}

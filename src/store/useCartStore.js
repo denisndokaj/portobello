@@ -4,7 +4,6 @@ import { create } from 'zustand'
 // this transaction (manual discounts happen here, never on the article).
 export const useCartStore = create((set, get) => ({
   lines: [],
-  paymentMethod: 'contanti',
   addLine: (article, price) => {
     if (get().lines.some((l) => l.article.id === article.id)) return
     set((s) => ({ lines: [...s.lines, { article, price }] }))
@@ -13,7 +12,6 @@ export const useCartStore = create((set, get) => ({
     set((s) => ({ lines: s.lines.map((l) => (l.article.id === articleId ? { ...l, price } : l)) }))
   },
   removeLine: (articleId) => set((s) => ({ lines: s.lines.filter((l) => l.article.id !== articleId) })),
-  setPaymentMethod: (m) => set({ paymentMethod: m }),
-  clear: () => set({ lines: [], paymentMethod: 'contanti' }),
+  clear: () => set({ lines: [] }),
   total: () => get().lines.reduce((sum, l) => sum + Number(l.price || 0), 0),
 }))

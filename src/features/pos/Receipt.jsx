@@ -1,11 +1,10 @@
-import { formatMoney, formatDateTime, padCode, PAYMENT_METHODS } from '../../lib/business'
+import { formatMoney, formatDateTime, padCode } from '../../lib/business'
 
 /** Always mounted (off-screen unless printing); .print-area makes it the
  * only visible thing when window.print() fires, sized to the configured
  * thermal receipt width. */
 export default function Receipt({ sale, settings }) {
   if (!sale) return null
-  const methodLabel = PAYMENT_METHODS.find((m) => m.value === sale.method)?.label || sale.method
   const widthClass = settings.hardware.receiptWidth === '57mm' ? 'receipt-57mm' : 'receipt-80mm'
 
   return (
@@ -17,7 +16,6 @@ export default function Receipt({ sale, settings }) {
       </div>
       <div className="my-1 border-t border-dashed border-black" />
       <p>{formatDateTime(sale.date)}</p>
-      <p>Pagamento: {methodLabel}</p>
       <div className="my-1 border-t border-dashed border-black" />
       {sale.lines.map((l) => (
         <div key={l.article.id} className="flex justify-between gap-2">

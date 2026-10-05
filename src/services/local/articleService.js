@@ -92,7 +92,7 @@ export async function deleteArticle(id) {
 
 /** Sells an article at `price`, freezing tax/commission math as of today's
  * settings so later schedule changes never retroactively alter past sales. */
-export async function sellArticle(id, { price, date, paymentMethod = 'contanti' } = {}) {
+export async function sellArticle(id, { price, date } = {}) {
   const settings = await getSettings()
   const art = await db.articles.get(Number(id))
   const vendor = art.vendorId ? await db.vendors.get(art.vendorId) : null
@@ -111,7 +111,6 @@ export async function sellArticle(id, { price, date, paymentMethod = 'contanti' 
     soldCommissionPercent: commission,
     soldShopShare: shopShare,
     soldVendorShare: vendorShare,
-    paymentMethod,
   })
   await addLog('articolo_venduto', `Articolo venduto: ${padCode(art.code)} - ${art.description} a € ${gross.toFixed(2)}`, {
     articleId: art.id,
@@ -133,7 +132,6 @@ export async function cancelSale(id) {
     soldCommissionPercent: null,
     soldShopShare: null,
     soldVendorShare: null,
-    paymentMethod: null,
   })
   await addLog('vendita_annullata', `Vendita annullata: ${padCode(art.code)} - ${art.description}`, {
     articleId: art.id,
@@ -160,6 +158,35 @@ export async function revertRitiro(id) {
   const art = await db.articles.get(Number(id))
   await db.articles.update(Number(id), { status: 'disponibile', ritiroDate: null, ritiroMotivo: null })
   await addLog('articolo_modificato', `Ritiro annullato: ${padCode(art.code)} - ${art.description}`, {
+    articleId: art.id,
+    articleCode: padCode(art.code),
+    vendorId: art.vendorId,
+  })
+}
+
+/** Records a partial deposit from a buyer reserving the article. The
+ * article stays on sale (never flips to 'venduto') - the deposit is just
+ * informational until someone actually sells it, at which point the sale
+ * flow surfaces it so the cashier only collects the difference. */
+export async function setDeposit(id, { amount, date, note = '' } = {}) {
+  const art = await db.articles.get(Number(id))
+  await db.articles.update(Number(id), {
+    depositAmount: round2(Number(amount)),
+    depositDate: date || new Date().toISOString().slice(0, 10),
+    depositNote: note,
+  })
+  await addLog('acconto_registrato', `Acconto di € ${round2(Number(amount)).toFixed(2)} registrato: ${padCode(art.code)} - ${art.description}`, {
+    articleId: art.id,
+    articleCode: padCode(art.code),
+    vendorId: art.vendorId,
+    amount: round2(Number(amount)),
+  })
+}
+
+export async function clearDeposit(id) {
+  const art = await db.articles.get(Number(id))
+  await db.articles.update(Number(id), { depositAmount: null, depositDate: null, depositNote: '' })
+  await addLog('acconto_registrato', `Acconto annullato: ${padCode(art.code)} - ${art.description}`, {
     articleId: art.id,
     articleCode: padCode(art.code),
     vendorId: art.vendorId,
