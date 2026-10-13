@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { CheckSquare, Search, Undo2 } from 'lucide-react'
 import { listArticles, listVendors, sellArticle, cancelSale } from '../../services'
 import { useSettingsStore } from '../../store/useSettingsStore'
@@ -135,7 +136,9 @@ export default function SalesSearch() {
                   {vendor && (
                     <>
                       {' · '}
-                      {vendor.name} {vendor.surname}
+                      <Link to={`/venditori/${vendor.id}`} className="text-brand-700 hover:underline" onClick={(e) => e.stopPropagation()}>
+                        {vendor.name} {vendor.surname}
+                      </Link>
                     </>
                   )}
                 </p>
