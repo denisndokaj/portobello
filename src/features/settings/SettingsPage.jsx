@@ -5,13 +5,14 @@ import Card, { CardHeader } from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import { Field, Input, Select, Textarea, Checkbox } from '../../components/ui/Field'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
-import { Plus, Trash2, Download, Upload, RotateCcw, ImagePlus } from 'lucide-react'
+import { Plus, Trash2, Download, Upload, RotateCcw, ImagePlus, FileUp } from 'lucide-react'
 import { contractText, formatMoney, getCurrentPrice, round2 } from '../../lib/business'
 import { LABEL_PRESETS } from '../../lib/business'
 import { dumpDatabase, downloadJSON, restoreDatabase, listSnapshots, restoreSnapshot, autoBackup } from '../../lib/backup'
 import { downloadCSV } from '../../lib/exportUtils'
 import { db } from '../../lib/db'
 import { resetAllData, setNextArticleCode, setNextInvoiceNumber, setNextUnnumberedNumber, getCounters } from '../../services'
+import { parseStaging, summarizeStaging, applyLegacyImport } from '../../services/local/legacyImportService'
 
 export default function SettingsPage() {
   const storeSettings = useSettingsStore((s) => s.settings)
@@ -22,6 +23,12 @@ export default function SettingsPage() {
   const [confirmReset, setConfirmReset] = useState(false)
   const fileInputRef = useRef(null)
   const logoInputRef = useRef(null)
+  const legacyFileInputRef = useRef(null)
+  const [legacyStaging, setLegacyStaging] = useState(null)
+  const [legacySummary, setLegacySummary] = useState(null)
+  const [confirmLegacyImport, setConfirmLegacyImport] = useState(false)
+  const [legacyImporting, setLegacyImporting] = useState(false)
+  const [legacyResult, setLegacyResult] = useState(null)
 
   useEffect(() => setForm(storeSettings), [storeSettings])
   useEffect(() => {
@@ -101,6 +108,38 @@ export default function SettingsPage() {
         { header: 'Data vendita', value: (a) => a.soldDate || '' },
       ],
     )
+  }
+
+  async function handleLegacyFile(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      const text = await file.text()
+      const staging = parseStaging(text)
+      setLegacyStaging(staging)
+      setLegacySummary(summarizeStaging(staging))
+      setLegacyResult(null)
+    } catch (err) {
+      toast(err.message || 'File non valido', 'error')
+    }
+  }
+
+  async function handleConfirmLegacyImport() {
+    setLegacyImporting(true)
+    try {
+      await autoBackup('prima di importare dati dal vecchio gestionale')
+      const result = await applyLegacyImport(legacyStaging)
+      setLegacyResult(result)
+      setLegacyStaging(null)
+      setLegacySummary(null)
+      toast('Importazione completata', 'success')
+    } catch (err) {
+      toast(err.message || "Errore durante l'importazione", 'error')
+    } finally {
+      setLegacyImporting(false)
+      setConfirmLegacyImport(false)
+    }
   }
 
   async function handleReset() {
@@ -280,6 +319,79 @@ export default function SettingsPage() {
           <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">{contractText(form)}</div>
         </div>
       </Card>
+
+      <Card>
+        <CardHeader title="Importazione dal vecchio gestionale" subtitle="Carica il file di importazione preparato in chat (venditori e articoli convertiti dal vecchio archivio)" />
+        <div className="space-y-3 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={() => legacyFileInputRef.current?.click()} type="button">
+              <FileUp size={14} /> Scegli file di importazione
+            </Button>
+            <input ref={legacyFileInputRef} type="file" accept="application/json" className="hidden" onChange={handleLegacyFile} />
+          </div>
+
+          {legacySummary && (
+            <div className="space-y-3 rounded-lg border border-slate-200 p-3">
+              <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                <div>
+                  <p className="text-xs text-slate-400">Venditori</p>
+                  <p className="font-semibold text-slate-800">{legacySummary.vendorsTotal}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Articoli</p>
+                  <p className="font-semibold text-slate-800">{legacySummary.articlesTotal}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Disponibili / Venduti / Ritirati</p>
+                  <p className="font-semibold text-slate-800">
+                    {legacySummary.byStatus.disponibile || 0} / {legacySummary.byStatus.venduto || 0} / {legacySummary.byStatus.ritirato || 0}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400">Venduto da liquidare dopo l'import</p>
+                  <p className="font-semibold text-slate-800">{legacySummary.soldPostCutoff}</p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">
+                Cutoff liquidazioni: <strong>{legacySummary.cutoffDate}</strong> — {legacySummary.soldPreCutoff} vendite fino a questa data saranno marcate come già liquidate,{' '}
+                {legacySummary.soldPostCutoff} resteranno da liquidare normalmente.
+                {legacySummary.stubVendors > 0 && (
+                  <>
+                    {' '}
+                    <strong>{legacySummary.stubVendors}</strong> venditori sono stati ricostruiti solo dal nome (riferimento originale mancante) — verificali dopo l'import.
+                  </>
+                )}
+                {legacySummary.ambiguousVendors > 0 && (
+                  <>
+                    {' '}
+                    <strong>{legacySummary.ambiguousVendors}</strong> hanno un nome/cognome separato automaticamente da un nome composto — controllali in Venditori.
+                  </>
+                )}
+              </p>
+              <Button size="sm" onClick={() => setConfirmLegacyImport(true)} type="button">
+                Importa questi dati
+              </Button>
+            </div>
+          )}
+
+          {legacyResult && (
+            <div className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
+              Importati {legacyResult.vendorsImported} venditori, {legacyResult.articlesImported} articoli e ricostruite {legacyResult.invoicesReconstructed} distinte storiche già liquidate.
+            </div>
+          )}
+        </div>
+      </Card>
+
+      <ConfirmDialog
+        open={confirmLegacyImport}
+        title="Importa dati dal vecchio gestionale"
+        danger
+        requireText="IMPORTA"
+        message={`Verranno aggiunti ${legacySummary?.vendorsTotal ?? 0} venditori e ${legacySummary?.articlesTotal ?? 0} articoli ai dati già presenti. Verrà creata un'istantanea di sicurezza prima di procedere. L'operazione non è reversibile da qui (ma puoi ripristinare l'istantanea).`}
+        confirmLabel={legacyImporting ? 'Importazione in corso...' : 'Importa'}
+        onCancel={() => setConfirmLegacyImport(false)}
+        onConfirm={handleConfirmLegacyImport}
+      />
 
       <Card>
         <CardHeader title="Dati e backup" />
