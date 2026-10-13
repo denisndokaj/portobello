@@ -4,6 +4,7 @@ import { getSettings } from './settingsService'
 import { calcNet, calcTax, splitNet, round2 } from '../../lib/business'
 
 const STAGING_VERSION = 1
+const RECONSTRUCTED_NOTE = 'Liquidazione storica ricostruita in sede di importazione dal vecchio gestionale.'
 
 export function parseStaging(jsonText) {
   const staging = JSON.parse(jsonText)
@@ -44,9 +45,16 @@ export function summarizeStaging(staging) {
   }
 }
 
+/** Last calendar day of a "YYYY-MM" month, as an ISO date string. Computed
+ * entirely in UTC (Date.UTC + getUTCDate, no toISOString() on a
+ * locally-constructed Date) because that conversion is timezone-sensitive:
+ * in any zone ahead of UTC, local midnight on the last day shifts back into
+ * the previous day once converted, silently cutting the month one day
+ * short for every settlement built from it. */
 function lastDayOfMonth(isoYearMonth) {
   const [y, m] = isoYearMonth.split('-').map(Number)
-  return new Date(y, m, 0).toISOString().slice(0, 10)
+  const day = new Date(Date.UTC(y, m, 0)).getUTCDate()
+  return `${isoYearMonth}-${String(day).padStart(2, '0')}`
 }
 
 /** Writes the staging payload into the live database: vendors, articles
@@ -193,7 +201,7 @@ export async function applyLegacyImport(staging) {
         paid: true,
         paidDate: cutoffDate,
         paidMethod: 'altro',
-        paidNote: 'Liquidazione storica ricostruita in sede di importazione dal vecchio gestionale.',
+        paidNote: RECONSTRUCTED_NOTE,
         signature: null,
         ...totals,
       })
@@ -205,7 +213,7 @@ export async function applyLegacyImport(staging) {
 
   await addLog(
     'dati_importati',
-    `Importazione dal vecchio gestionale: ${stagingVendors.length} venditori, ${stagingArticles.length} articoli, ${invoicesCreated} distinte storiche ricostruite e liquidate fino al ${cutoffDate}.`,
+    `Importazione dal vecchio gestionale: ${stagingVendors.length} venditori, ${stagingArticles.length} articoli, ${invoicesCreated} fatture storiche ricostruite e liquidate fino al ${cutoffDate}.`,
     {},
   )
 
@@ -214,4 +222,31 @@ export async function applyLegacyImport(staging) {
     articlesImported: stagingArticles.length,
     invoicesReconstructed: invoicesCreated,
   }
+}
+
+/** One-time repair for fatture this importer itself created before the
+ * timezone bug in `lastDayOfMonth` was fixed: in any zone ahead of UTC it
+ * stored "to" one day short of the real month-end (e.g. 29/09 instead of
+ * 30/09), even though the articles attached were already grouped correctly
+ * by sale month - only the printed/displayed period was wrong, totals are
+ * untouched here. Scoped strictly to rows carrying this importer's own
+ * paidNote marker, so a manually created or normally-generated fattura
+ * with a deliberately partial period is never touched. */
+export async function repairReconstructedInvoiceDates() {
+  const invoices = await db.invoices.toArray()
+  const candidates = invoices.filter((inv) => inv.paidNote === RECONSTRUCTED_NOTE)
+  const fixes = []
+  for (const inv of candidates) {
+    if (!inv.from) continue
+    const ym = inv.from.slice(0, 7)
+    const correctTo = lastDayOfMonth(ym)
+    if (inv.to !== correctTo) fixes.push({ id: inv.id, from: inv.from, oldTo: inv.to, newTo: correctTo })
+  }
+  if (fixes.length) {
+    await db.transaction('rw', db.invoices, async () => {
+      for (const f of fixes) await db.invoices.update(f.id, { to: f.newTo })
+    })
+    await addLog('dati_importati', `Corretta la data di fine periodo su ${fixes.length} fatture storiche ricostruite dall'importazione.`, {})
+  }
+  return fixes
 }

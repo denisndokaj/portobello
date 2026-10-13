@@ -137,7 +137,7 @@ export default function VendorForm({ open, onClose, vendor, onSaved }) {
         </Field>
         <div className="flex flex-col justify-center gap-2 pt-5">
           <Checkbox label="Soggetto a ritenuta/imposta" checked={form.applyTax} onChange={(e) => set('applyTax', e.target.checked)} />
-          <Checkbox label="Incluso nella numerazione ufficiale distinte" checked={form.countInNumbering} onChange={(e) => set('countInNumbering', e.target.checked)} />
+          <Checkbox label="Incluso nella numerazione ufficiale fatture" checked={form.countInNumbering} onChange={(e) => set('countInNumbering', e.target.checked)} />
         </div>
         <Field label="Note riservate" className="sm:col-span-2">
           <Textarea value={form.notes} onChange={(e) => set('notes', e.target.value)} />

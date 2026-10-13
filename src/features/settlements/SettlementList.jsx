@@ -60,7 +60,7 @@ export default function SettlementList() {
     const vendor = vendorMap[invoice.vendorId]
     const articles = await getInvoiceArticles(invoice)
     const doc = generateInvoicePdf(invoice, vendor, articles, settings)
-    doc.save(`distinta-${invoiceLabel(invoice, settings)}.pdf`)
+    doc.save(`fattura-${invoiceLabel(invoice, settings)}.pdf`)
   }
 
   const [bulkCount, setBulkCount] = useState(0)
@@ -86,8 +86,8 @@ export default function SettlementList() {
         items.push({ invoice, vendor: freshVendorMap[invoice.vendorId], articles })
       }
       const doc = generateBulkInvoicePdf(items, settings)
-      doc.save(`distinte-${bulkMonth}.pdf`)
-      toast(`${items.length} distinte generate e pronte per la stampa`, 'success')
+      doc.save(`fatture-${bulkMonth}.pdf`)
+      toast(`${items.length} fatture generate e pronte per la stampa`, 'success')
       reload()
     } finally {
       setBulkBusy(false)
@@ -102,7 +102,7 @@ export default function SettlementList() {
   }
 
   function exportCSV() {
-    downloadCSV('distinte.csv', filtered, [
+    downloadCSV('fatture.csv', filtered, [
       { header: 'Numero', value: (i) => invoiceLabel(i, settings) },
       { header: 'Venditore', value: (i) => (vendorMap[i.vendorId] ? `${vendorMap[i.vendorId].name} ${vendorMap[i.vendorId].surname}` : '') },
       { header: 'Dal', value: (i) => i.from },
@@ -118,14 +118,14 @@ export default function SettlementList() {
     <div className="space-y-4 pb-10">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="flex items-center gap-2 text-xl font-semibold text-slate-800">
-          <FileText size={22} /> Distinte & Pagamenti
+          <FileText size={22} /> Fatture & Pagamenti
         </h1>
         <div className="flex gap-2">
           <Button variant="secondary" onClick={exportCSV}>
             <Download size={16} /> CSV
           </Button>
           <Button onClick={() => setNewOpen(true)}>
-            <Plus size={16} /> Nuova distinta
+            <Plus size={16} /> Nuova fattura
           </Button>
         </div>
       </div>
@@ -133,11 +133,11 @@ export default function SettlementList() {
       <div className="grid grid-cols-3 gap-3">
         <Stat label="Da liquidare" value={formatMoney(totals.due)} tone="text-amber-600" />
         <Stat label="Liquidato storico" value={formatMoney(totals.paid)} tone="text-brand-700" />
-        <Stat label="Distinte aperte" value={totals.openCount} />
+        <Stat label="Fatture aperte" value={totals.openCount} />
       </div>
 
       <Card>
-        <CardHeader title="Distinte del mese" subtitle="Genera e stampa in un colpo solo tutte le distinte dei venditori che hanno venduto qualcosa nel mese scelto" />
+        <CardHeader title="Fatture del mese" subtitle="Genera e stampa in un colpo solo tutte le fatture dei venditori che hanno venduto qualcosa nel mese scelto" />
         <div className="flex flex-wrap items-center gap-3 p-4">
           <Input type="month" className="w-44" value={bulkMonth} onChange={(e) => setBulkMonth(e.target.value)} />
           <span className="text-sm text-slate-500">{bulkCount} venditori con vendite nel mese</span>
@@ -160,7 +160,7 @@ export default function SettlementList() {
       </div>
 
       <Card className="divide-y divide-slate-100 overflow-hidden">
-        {filtered.length === 0 && <p className="p-4 text-sm text-slate-400">Nessuna distinta.</p>}
+        {filtered.length === 0 && <p className="p-4 text-sm text-slate-400">Nessuna fattura.</p>}
         {filtered.map((inv) => {
           const vendor = vendorMap[inv.vendorId]
           return (
@@ -206,7 +206,7 @@ export default function SettlementList() {
         open={!!cancelTarget}
         title="Annulla pagamento"
         danger
-        message="La distinta tornerà nello stato 'da liquidare'."
+        message="La fattura tornerà nello stato 'da liquidare'."
         onCancel={() => setCancelTarget(null)}
         onConfirm={handleCancelPayment}
       />
@@ -224,7 +224,7 @@ function NewSettlementModal({ open, onClose, onCreated }) {
   async function handleCreate() {
     if (!vendorId) return toast('Seleziona un venditore', 'error')
     await getOrCreateInvoice(vendorId, from, to)
-    toast('Distinta generata', 'success')
+    toast('Fattura generata', 'success')
     onCreated()
     onClose()
   }
@@ -233,7 +233,7 @@ function NewSettlementModal({ open, onClose, onCreated }) {
     <Modal
       open={open}
       onClose={onClose}
-      title="Nuova distinta"
+      title="Nuova fattura"
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>

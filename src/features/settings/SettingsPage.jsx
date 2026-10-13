@@ -12,7 +12,7 @@ import { dumpDatabase, downloadJSON, restoreDatabase, listSnapshots, restoreSnap
 import { downloadCSV } from '../../lib/exportUtils'
 import { db } from '../../lib/db'
 import { resetAllData, setNextArticleCode, setNextInvoiceNumber, setNextUnnumberedNumber, getCounters } from '../../services'
-import { parseStaging, summarizeStaging, applyLegacyImport } from '../../services/local/legacyImportService'
+import { parseStaging, summarizeStaging, applyLegacyImport, repairReconstructedInvoiceDates } from '../../services/local/legacyImportService'
 
 export default function SettingsPage() {
   const storeSettings = useSettingsStore((s) => s.settings)
@@ -29,6 +29,8 @@ export default function SettingsPage() {
   const [confirmLegacyImport, setConfirmLegacyImport] = useState(false)
   const [legacyImporting, setLegacyImporting] = useState(false)
   const [legacyResult, setLegacyResult] = useState(null)
+  const [repairBusy, setRepairBusy] = useState(false)
+  const [repairResult, setRepairResult] = useState(null)
 
   useEffect(() => setForm(storeSettings), [storeSettings])
   useEffect(() => {
@@ -139,6 +141,20 @@ export default function SettingsPage() {
     } finally {
       setLegacyImporting(false)
       setConfirmLegacyImport(false)
+    }
+  }
+
+  async function handleRepairInvoiceDates() {
+    setRepairBusy(true)
+    try {
+      await autoBackup('prima di correggere le date di fine periodo delle fatture storiche')
+      const fixes = await repairReconstructedInvoiceDates()
+      setRepairResult(fixes.length)
+      toast(fixes.length ? `Corrette ${fixes.length} fatture` : 'Nessuna fattura da correggere', 'success')
+    } catch (err) {
+      toast(err.message || 'Errore durante la correzione', 'error')
+    } finally {
+      setRepairBusy(false)
     }
   }
 
@@ -267,10 +283,10 @@ export default function SettingsPage() {
           <Field label="Promemoria backup (giorni)">
             <Input type="number" min={1} value={form.business.backupReminderDays} onChange={(e) => set('business.backupReminderDays', Number(e.target.value))} />
           </Field>
-          <Field label="Prefisso distinte numerate">
+          <Field label="Prefisso fatture numerate">
             <Input value={form.business.invoicePrefix} onChange={(e) => set('business.invoicePrefix', e.target.value)} />
           </Field>
-          <Field label="Prefisso distinte fuori numerazione">
+          <Field label="Prefisso fatture fuori numerazione">
             <Input value={form.business.unnumberedDocPrefix} onChange={(e) => set('business.unnumberedDocPrefix', e.target.value)} />
           </Field>
         </div>
@@ -279,7 +295,7 @@ export default function SettingsPage() {
             <Field label="Prossimo codice articolo" hint={`attuale: ${counters.nextArticleCode}`}>
               <Input type="number" defaultValue={counters.nextArticleCode} onBlur={async (e) => setCounters(await setNextArticleCode(e.target.value).then(getCounters))} />
             </Field>
-            <Field label="Prossimo n. distinta" hint={`attuale: ${counters.nextInvoiceNumber}`}>
+            <Field label="Prossimo n. fattura" hint={`attuale: ${counters.nextInvoiceNumber}`}>
               <Input type="number" defaultValue={counters.nextInvoiceNumber} onBlur={async (e) => setCounters(await setNextInvoiceNumber(e.target.value).then(getCounters))} />
             </Field>
             <Field label="Prossimo n. fuori numerazione" hint={`attuale: ${counters.nextUnnumberedNumber}`}>
@@ -376,9 +392,23 @@ export default function SettingsPage() {
 
           {legacyResult && (
             <div className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
-              Importati {legacyResult.vendorsImported} venditori, {legacyResult.articlesImported} articoli e ricostruite {legacyResult.invoicesReconstructed} distinte storiche già liquidate.
+              Importati {legacyResult.vendorsImported} venditori, {legacyResult.articlesImported} articoli e ricostruite {legacyResult.invoicesReconstructed} fatture storiche già liquidate.
             </div>
           )}
+
+          <div className="border-t border-slate-100 pt-3">
+            <p className="mb-2 text-xs text-slate-500">
+              Le fatture storiche ricostruite da un'importazione fatta prima del 13/10/2026 possono avere la data di fine periodo sbagliata di un giorno
+              (es. "al 29/09" invece di "al 30/09"). I totali non sono interessati, solo il periodo mostrato in stampa. Questo pulsante corregge solo
+              quelle, senza toccare nient'altro.
+            </p>
+            <Button variant="secondary" size="sm" onClick={handleRepairInvoiceDates} disabled={repairBusy} type="button">
+              {repairBusy ? 'Correzione in corso...' : 'Correggi date di fine periodo'}
+            </Button>
+            {repairResult !== null && (
+              <span className="ml-2 text-xs text-slate-500">{repairResult > 0 ? `${repairResult} fatture corrette.` : 'Nessuna correzione necessaria.'}</span>
+            )}
+          </div>
         </div>
       </Card>
 
@@ -441,7 +471,7 @@ export default function SettingsPage() {
         title="Azzera tutti i dati"
         danger
         requireText="CANCELLA"
-        message="Questa operazione elimina definitivamente venditori, articoli, distinte e registro. Verrà creata un'istantanea di sicurezza prima di procedere."
+        message="Questa operazione elimina definitivamente venditori, articoli, fatture e registro. Verrà creata un'istantanea di sicurezza prima di procedere."
         confirmLabel="Azzera tutto"
         onCancel={() => setConfirmReset(false)}
         onConfirm={handleReset}

@@ -66,7 +66,7 @@ export async function getOrCreateInvoice(vendorId, from, to) {
   })
 
   if (created) {
-    await addLog('distinta_emessa', `Distinta emessa per venditore #${vendorId} (${from} – ${to})`, { vendorId: Number(vendorId) })
+    await addLog('distinta_emessa', `Fattura emessa per venditore #${vendorId} (${from} – ${to})`, { vendorId: Number(vendorId) })
   }
   return invoice
 }
@@ -116,7 +116,7 @@ export async function payInvoice(id, { date, method = 'contanti', note = '', sig
     signature,
   })
   const inv = await db.invoices.get(Number(id))
-  await addLog('pagamento_registrato', `Pagamento registrato: distinta #${inv.number} (€ ${inv.vendorShare.toFixed(2)})`, {
+  await addLog('pagamento_registrato', `Pagamento registrato: fattura #${inv.number} (€ ${inv.vendorShare.toFixed(2)})`, {
     vendorId: inv.vendorId,
     amount: inv.vendorShare,
   })
@@ -125,7 +125,7 @@ export async function payInvoice(id, { date, method = 'contanti', note = '', sig
 export async function cancelPayment(id) {
   const inv = await db.invoices.get(Number(id))
   await db.invoices.update(Number(id), { paid: false, paidDate: null, paidMethod: null, paidNote: null, signature: null })
-  await addLog('pagamento_annullato', `Pagamento annullato: distinta #${inv.number}`, { vendorId: inv.vendorId })
+  await addLog('pagamento_annullato', `Pagamento annullato: fattura #${inv.number}`, { vendorId: inv.vendorId })
 }
 
 export function invoiceNumberLabel(invoice, settings) {

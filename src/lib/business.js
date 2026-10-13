@@ -243,7 +243,7 @@ export const LOG_TYPE_LABELS = {
   venditore_aggiunto: 'Venditore aggiunto',
   venditore_modificato: 'Venditore modificato',
   venditore_eliminato: 'Venditore eliminato',
-  distinta_emessa: 'Distinta emessa',
+  distinta_emessa: 'Fattura emessa',
   pagamento_registrato: 'Pagamento registrato',
   pagamento_annullato: 'Pagamento annullato',
   impostazioni_modificate: 'Impostazioni modificate',

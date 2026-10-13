@@ -9,7 +9,7 @@ import { formatDate, formatMoney, padCode, invoiceLabel, calcNet, commissionOf, 
  * split, which is why "netto tassato" per line plus the three totals below
  * (netto, provvigione, spettanza) are the whole story. */
 function drawInvoiceOnPage(doc, invoice, vendor, articles, settings) {
-  let y = pdfLetterhead(doc, settings, 'Distinta di vendita', `Periodo dal ${formatDate(invoice.from)} al ${formatDate(invoice.to)}`)
+  let y = pdfLetterhead(doc, settings, 'Fattura di vendita', `Periodo dal ${formatDate(invoice.from)} al ${formatDate(invoice.to)}`)
 
   y = pdfMetaRow(doc, y, {
     left: ['Venditore', `${vendor.name} ${vendor.surname}`],
@@ -53,7 +53,7 @@ export function generateInvoicePdf(invoice, vendor, articles, settings) {
 }
 
 /** One combined PDF with every settlement, one per page - for "print all
- * of this month's distinte at once". `items` is [{ invoice, vendor, articles }]. */
+ * of this month's fatture at once". `items` is [{ invoice, vendor, articles }]. */
 export function generateBulkInvoicePdf(items, settings) {
   const doc = newDoc()
   items.forEach((item, i) => {

@@ -6,7 +6,7 @@ export const NAV_ITEMS = [
   { to: '/articoli', label: 'Articoli', icon: Package, shortcut: '3' },
   { to: '/cassa', label: 'Cassa', icon: ShoppingCart, shortcut: '4' },
   { to: '/segna-venduti', label: 'Segna Venduti', icon: CheckSquare, shortcut: '5' },
-  { to: '/distinte', label: 'Distinte', icon: FileText, shortcut: '6' },
+  { to: '/distinte', label: 'Fatture', icon: FileText, shortcut: '6' },
   { to: '/etichette', label: 'Etichette', icon: Tag, shortcut: '7' },
   { to: '/registro', label: 'Registro', icon: ScrollText, shortcut: '8' },
   { to: '/impostazioni', label: 'Impostazioni', icon: Settings, shortcut: '9' },
