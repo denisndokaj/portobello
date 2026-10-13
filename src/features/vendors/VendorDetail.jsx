@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Pencil, Trash2, FileDown, MessageCircle, Mail, Wallet, Plus } from 'lucide-react'
-import { getVendor, vendorStats, deleteVendor, listArticles, listInvoices, getOrCreateInvoice } from '../../services'
+import { getVendor, vendorStats, deleteVendor, listArticles, listInvoices, getOrCreateInvoice, cancelSale, deleteArticle } from '../../services'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { toast } from '../../store/useToastStore'
 import Stat from '../../components/ui/Stat'
@@ -13,12 +13,14 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import { Field, Input, Textarea } from '../../components/ui/Field'
 import VendorForm from './VendorForm'
 import QuickAddArticlesModal from './QuickAddArticlesModal'
+import ItemForm from '../items/ItemForm'
+import MovementsPanel from '../items/MovementsPanel'
 import { formatMoney, formatDate, padCode, getArticleStatus, getCurrentPrice, ARTICLE_STATUS_COLORS, ARTICLE_STATUS_LABELS, invoiceLabel, vendorNeedsReview } from '../../lib/business'
 import { generateMandatePdf, DEFAULT_RECESSO_CLAUSE } from '../../lib/mandatePdf'
 import { generateReceiptPdf } from '../../lib/invoicePdf'
 import { buildWhatsAppLink, buildMailtoLink, vendorStatementMessage } from '../../lib/share'
 
-const TABS = ['Articoli', 'Mandato', 'Distinte', 'Contatta']
+const TABS = ['Articoli', 'Movimenti', 'Mandato', 'Fatture', 'Contatta']
 
 export default function VendorDetail() {
   const { id } = useParams()
@@ -32,6 +34,27 @@ export default function VendorDetail() {
   const [editOpen, setEditOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [quickAddOpen, setQuickAddOpen] = useState(false)
+  const [editArticle, setEditArticle] = useState(null)
+  const [itemFormOpen, setItemFormOpen] = useState(false)
+  const [deleteArticleTarget, setDeleteArticleTarget] = useState(null)
+
+  function openArticle(article) {
+    setEditArticle(article)
+    setItemFormOpen(true)
+  }
+
+  async function handleCancelArticleSale(article) {
+    await cancelSale(article.id)
+    toast('Vendita annullata', 'success')
+    reload()
+  }
+
+  async function handleDeleteArticle() {
+    await deleteArticle(deleteArticleTarget.id)
+    toast('Articolo eliminato', 'success')
+    setDeleteArticleTarget(null)
+    reload()
+  }
 
   async function reload() {
     const [v, s, a, inv] = await Promise.all([getVendor(id), vendorStats(id), listArticles({ vendorId: id }), listInvoices({ vendorId: id })])
@@ -121,7 +144,7 @@ export default function VendorDetail() {
           {articles.map((a) => {
             const st = getArticleStatus(a, settings)
             return (
-              <div key={a.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+              <button key={a.id} onClick={() => openArticle(a)} className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-slate-50">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-slate-700">
                     <span className="font-mono text-xs text-slate-400">{padCode(a.code)}</span> {a.description}
@@ -131,22 +154,28 @@ export default function VendorDetail() {
                 <div className="flex items-center gap-2">
                   <Badge tone={ARTICLE_STATUS_COLORS[st.status]}>{ARTICLE_STATUS_LABELS[st.status]}</Badge>
                   <span className="w-16 text-right text-sm font-medium tabular-nums">{formatMoney(getCurrentPrice(a, settings))}</span>
+                  <Pencil size={14} className="text-slate-300" />
                 </div>
-              </div>
+              </button>
             )
           })}
           </Card>
         </div>
       )}
 
+      {tab === 'Movimenti' && (
+        <MovementsPanel articles={articles} onCancelSale={handleCancelArticleSale} onDelete={setDeleteArticleTarget} onEdit={openArticle} />
+      )}
+
       {tab === 'Mandato' && <MandateTab vendor={vendor} settings={settings} />}
 
-      {tab === 'Distinte' && <SettlementsTab vendorId={vendor.id} invoices={invoices} settings={settings} reload={reload} />}
+      {tab === 'Fatture' && <SettlementsTab vendorId={vendor.id} invoices={invoices} settings={settings} reload={reload} />}
 
       {tab === 'Contatta' && <ContactTab vendor={vendor} stats={stats} settings={settings} />}
 
       <VendorForm open={editOpen} onClose={() => setEditOpen(false)} vendor={vendor} onSaved={reload} />
       <QuickAddArticlesModal open={quickAddOpen} onClose={() => setQuickAddOpen(false)} vendor={vendor} onDone={reload} />
+      <ItemForm open={itemFormOpen} onClose={() => setItemFormOpen(false)} article={editArticle} defaultVendorId={vendor.id} onSaved={reload} />
       <ConfirmDialog
         open={confirmDelete}
         title="Elimina venditore"
@@ -154,6 +183,14 @@ export default function VendorDetail() {
         message="Il venditore verrà eliminato definitivamente. Non è possibile se ha ancora articoli associati."
         onCancel={() => setConfirmDelete(false)}
         onConfirm={handleDelete}
+      />
+      <ConfirmDialog
+        open={!!deleteArticleTarget}
+        title="Elimina articolo"
+        danger
+        message="L'articolo verrà eliminato definitivamente dall'archivio."
+        onCancel={() => setDeleteArticleTarget(null)}
+        onConfirm={handleDeleteArticle}
       />
     </div>
   )
@@ -247,7 +284,7 @@ function SettlementsTab({ vendorId, invoices, settings, reload }) {
 
   async function handleGenerate() {
     await getOrCreateInvoice(vendorId, from, to)
-    toast('Distinta generata/aggiornata', 'success')
+    toast('Fattura generata/aggiornata', 'success')
     reload()
   }
 
@@ -262,12 +299,12 @@ function SettlementsTab({ vendorId, invoices, settings, reload }) {
             <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
           </Field>
           <Button onClick={handleGenerate}>
-            <Wallet size={16} /> Genera distinta periodo
+            <Wallet size={16} /> Genera fattura periodo
           </Button>
         </div>
       </Card>
       <Card className="divide-y divide-slate-100 overflow-hidden">
-        {invoices.length === 0 && <p className="p-4 text-sm text-slate-400">Nessuna distinta emessa.</p>}
+        {invoices.length === 0 && <p className="p-4 text-sm text-slate-400">Nessuna fattura emessa.</p>}
         {invoices.map((inv) => (
           <div key={inv.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
             <div>

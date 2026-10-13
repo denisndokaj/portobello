@@ -7,12 +7,15 @@ import { useSettingsStore } from '../../store/useSettingsStore'
 import { lastBackupDate } from '../../lib/backup'
 import Stat from '../../components/ui/Stat'
 import Card, { CardHeader } from '../../components/ui/Card'
+import ItemForm from '../items/ItemForm'
 import { formatMoney, formatDate, padCode, getExpiringArticles } from '../../lib/business'
 
 export default function Dashboard() {
   const settings = useSettingsStore((s) => s.settings)
   const [summary, setSummary] = useState(null)
   const [chart, setChart] = useState([])
+  const [editArticle, setEditArticle] = useState(null)
+  const [itemFormOpen, setItemFormOpen] = useState(false)
   const [topVendors, setTopVendors] = useState([])
   const [pending, setPending] = useState([])
   const [latest, setLatest] = useState([])
@@ -21,33 +24,40 @@ export default function Dashboard() {
   const [vendorCount, setVendorCount] = useState(0)
   const [unlabeledCount, setUnlabeledCount] = useState(0)
 
+  async function reload() {
+    const [s, c, tv, p, r, articles, vendors] = await Promise.all([
+      dashboardSummary(),
+      salesByMonth(12),
+      topVendorsBySales(8),
+      pendingSettlementByVendor(),
+      recentSales(8),
+      listArticles({}),
+      listVendors(),
+    ])
+    setSummary(s)
+    setChart(c)
+    setTopVendors(tv)
+    setPending(p.slice(0, 8))
+    setLatest(r)
+    // Not-yet-expired items are the time-sensitive ones (there's still a
+    // window to act), so the preview leads with those; already-expired
+    // stock only fills remaining slots. The full count (not the 8-item
+    // preview) is what the "N in scadenza o scaduti" action line uses.
+    const allExpiring = getExpiringArticles(articles, settings)
+    setExpiring([...allExpiring].sort((a, b) => Number(a.isExpired) - Number(b.isExpired)).slice(0, 8))
+    setExpiringCount(allExpiring.length)
+    setVendorCount(vendors.length)
+    setUnlabeledCount(articles.filter((a) => a.status === 'disponibile' && !a.labelPrintedAt).length)
+  }
+
   useEffect(() => {
-    ;(async () => {
-      const [s, c, tv, p, r, articles, vendors] = await Promise.all([
-        dashboardSummary(),
-        salesByMonth(12),
-        topVendorsBySales(8),
-        pendingSettlementByVendor(),
-        recentSales(8),
-        listArticles({}),
-        listVendors(),
-      ])
-      setSummary(s)
-      setChart(c)
-      setTopVendors(tv)
-      setPending(p.slice(0, 8))
-      setLatest(r)
-      // Not-yet-expired items are the time-sensitive ones (there's still a
-      // window to act), so the preview leads with those; already-expired
-      // stock only fills remaining slots. The full count (not the 8-item
-      // preview) is what the "N in scadenza o scaduti" action line uses.
-      const allExpiring = getExpiringArticles(articles, settings)
-      setExpiring([...allExpiring].sort((a, b) => Number(a.isExpired) - Number(b.isExpired)).slice(0, 8))
-      setExpiringCount(allExpiring.length)
-      setVendorCount(vendors.length)
-      setUnlabeledCount(articles.filter((a) => a.status === 'disponibile' && !a.labelPrintedAt).length)
-    })()
+    reload()
   }, [settings])
+
+  function openArticle(article) {
+    setEditArticle(article)
+    setItemFormOpen(true)
+  }
 
   if (!summary) return <p className="text-sm text-slate-400">Caricamento...</p>
 
@@ -141,13 +151,13 @@ export default function Dashboard() {
           <div className="divide-y divide-slate-100">
             {latest.length === 0 && <p className="p-4 text-sm text-slate-400">Nessuna vendita ancora.</p>}
             {latest.map((a) => (
-              <div key={a.id} className="flex items-center justify-between px-4 py-2 text-sm">
+              <button key={a.id} onClick={() => openArticle(a)} className="flex w-full items-center justify-between px-4 py-2 text-left text-sm hover:bg-slate-50">
                 <span className="truncate">
                   <span className="mr-1.5 font-mono text-xs text-slate-400">{padCode(a.code)}</span>
                   {a.description}
                 </span>
                 <span className="shrink-0 font-medium tabular-nums">{formatMoney(a.soldPrice)}</span>
-              </div>
+              </button>
             ))}
           </div>
         </Card>
@@ -157,7 +167,7 @@ export default function Dashboard() {
           <div className="divide-y divide-slate-100">
             {expiring.length === 0 && <p className="p-4 text-sm text-slate-400">Nessun articolo in scadenza.</p>}
             {expiring.map(({ article, isExpired }) => (
-              <div key={article.id} className="flex items-center justify-between px-4 py-2 text-sm">
+              <button key={article.id} onClick={() => openArticle(article)} className="flex w-full items-center justify-between px-4 py-2 text-left text-sm hover:bg-slate-50">
                 <span className="min-w-0 truncate">
                   <span className="mr-1.5 font-mono text-xs text-slate-400">{padCode(article.code)}</span>
                   {article.description}
@@ -168,11 +178,13 @@ export default function Dashboard() {
                   )}
                 </span>
                 <span className="shrink-0 text-xs text-slate-400">carico {formatDate(article.loadDate)}</span>
-              </div>
+              </button>
             ))}
           </div>
         </Card>
       </div>
+
+      <ItemForm open={itemFormOpen} onClose={() => setItemFormOpen(false)} article={editArticle} onSaved={reload} />
     </div>
   )
 }

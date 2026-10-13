@@ -15,13 +15,11 @@ import {
   AlertTriangle,
   Coins,
   CalendarRange,
-  LogIn,
-  LogOut,
 } from 'lucide-react'
 import { listArticles, listCategories, cancelSale, revertRitiro, deleteArticle, extendMandate, getArticleByCode, bulkSetCategory } from '../../services'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { toast } from '../../store/useToastStore'
-import { Field, Input, Select } from '../../components/ui/Field'
+import { Input, Select } from '../../components/ui/Field'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
@@ -30,6 +28,7 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import VendorPicker from '../../components/VendorPicker'
 import BarcodeScannerModal from '../../components/BarcodeScannerModal'
 import ItemForm from './ItemForm'
+import MovementsPanel from './MovementsPanel'
 import SellModal from './SellModal'
 import RitiroModal from './RitiroModal'
 import DepositModal from './DepositModal'
@@ -44,10 +43,6 @@ export default function ItemList() {
   const [filters, setFilters] = useState({ code: '', text: '', vendorId: null, status: '', category: '' })
   const [page, setPage] = useState(1)
   const [view, setView] = useState('tutti') // 'tutti' | 'scadenze' | 'movimenti'
-  const todayIso = new Date().toISOString().slice(0, 10)
-  const [movFrom, setMovFrom] = useState(todayIso)
-  const [movTo, setMovTo] = useState(todayIso)
-  const [movFilter, setMovFilter] = useState('entrambi') // 'entrambi' | 'entrati' | 'venduti'
   const [expiringFilter, setExpiringFilter] = useState('in_scadenza') // 'in_scadenza' | 'scaduti' | 'tutti'
   const [formOpen, setFormOpen] = useState(false)
   const [editArticle, setEditArticle] = useState(null)
@@ -104,18 +99,6 @@ export default function ItemList() {
     if (expiringFilter === 'scaduti') return expiringExpired
     return expiring
   }, [expiringFilter, expiring, expiringInWarning, expiringExpired])
-
-  const movEntrati = useMemo(
-    () => articles.filter((a) => a.loadDate >= movFrom && a.loadDate <= movTo).sort((a, b) => b.loadDate.localeCompare(a.loadDate)),
-    [articles, movFrom, movTo],
-  )
-  const movVenduti = useMemo(
-    () =>
-      articles
-        .filter((a) => a.status === 'venduto' && a.soldDate && a.soldDate >= movFrom && a.soldDate <= movTo)
-        .sort((a, b) => b.soldDate.localeCompare(a.soldDate)),
-    [articles, movFrom, movTo],
-  )
 
   const rows = view === 'scadenze' ? expiringRows.map((x) => x.article) : filtered
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
@@ -274,17 +257,14 @@ export default function ItemList() {
       )}
 
       {view === 'movimenti' && (
-        <MovementsView
-          movFrom={movFrom}
-          movTo={movTo}
-          setMovFrom={setMovFrom}
-          setMovTo={setMovTo}
-          movFilter={movFilter}
-          setMovFilter={setMovFilter}
-          entrati={movEntrati}
-          venduti={movVenduti}
+        <MovementsPanel
+          articles={articles}
           onCancelSale={handleCancelSale}
           onDelete={setDeleteTarget}
+          onEdit={(a) => {
+            setEditArticle(a)
+            setFormOpen(true)
+          }}
         />
       )}
 
@@ -451,125 +431,3 @@ function RowAction({ icon: Icon, label, onClick, danger }) {
   )
 }
 
-const MOVEMENTS_LIMIT = 300
-
-/** "What came in / what went out" for a chosen day or range, straight from
- * loadDate/soldDate on the articles themselves - a stock-movement view, not
- * a log. Registro answers "what happened in the cash register"; this
- * answers "what physically moved" and needs no cash-register entry to show
- * up (a returned/withdrawn item never appears here as a sale). */
-const MOVEMENT_FILTERS = [
-  { value: 'entrambi', label: 'Entrambi' },
-  { value: 'entrati', label: 'Solo entrati' },
-  { value: 'venduti', label: 'Solo venduti' },
-]
-
-function MovementsView({ movFrom, movTo, setMovFrom, setMovTo, movFilter, setMovFilter, entrati, venduti, onCancelSale, onDelete }) {
-  const todayIso = new Date().toISOString().slice(0, 10)
-  const entrantiValue = entrati.reduce((s, a) => s + (a.originalPrice || 0), 0)
-  const vendutiValue = venduti.reduce((s, a) => s + (a.soldPrice || 0), 0)
-
-  function setToday() {
-    setMovFrom(todayIso)
-    setMovTo(todayIso)
-  }
-
-  return (
-    <div className="space-y-4">
-      <Card className="flex flex-wrap items-end gap-3 p-3">
-        <Field label="Dal">
-          <Input type="date" value={movFrom} max={movTo} onChange={(e) => setMovFrom(e.target.value)} />
-        </Field>
-        <Field label="Al">
-          <Input type="date" value={movTo} min={movFrom} max={todayIso} onChange={(e) => setMovTo(e.target.value)} />
-        </Field>
-        <Button variant="secondary" size="sm" onClick={setToday} type="button">
-          Oggi
-        </Button>
-        <div className="ml-auto flex gap-1 rounded-lg bg-slate-100 p-1">
-          {MOVEMENT_FILTERS.map((f) => (
-            <button
-              key={f.value}
-              type="button"
-              onClick={() => setMovFilter(f.value)}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium ${movFilter === f.value ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      </Card>
-
-      {movFilter !== 'venduti' && (
-        <MovementSection
-          icon={LogIn}
-          title="Entrati"
-          tone="text-brand-700"
-          count={entrati.length}
-          value={entrantiValue}
-          valueLabel="valore a listino"
-          rows={entrati}
-          dateField="loadDate"
-          priceField="originalPrice"
-          actionLabel="Elimina"
-          onAction={onDelete}
-        />
-      )}
-      {movFilter !== 'entrati' && (
-        <MovementSection
-          icon={LogOut}
-          title="Venduti"
-          tone="text-amber-700"
-          count={venduti.length}
-          value={vendutiValue}
-          valueLabel="incassato"
-          rows={venduti}
-          dateField="soldDate"
-          priceField="soldPrice"
-          actionLabel="Annulla vendita"
-          onAction={onCancelSale}
-        />
-      )}
-    </div>
-  )
-}
-
-function MovementSection({ icon: Icon, title, tone, count, value, valueLabel, rows, dateField, priceField, actionLabel, onAction }) {
-  const shown = rows.slice(0, MOVEMENTS_LIMIT)
-  return (
-    <Card className="overflow-hidden">
-      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-        <p className={`flex items-center gap-1.5 text-sm font-semibold ${tone}`}>
-          <Icon size={15} /> {title} ({count})
-        </p>
-        <p className="text-sm font-medium text-slate-600">
-          {formatMoney(value)} <span className="text-xs font-normal text-slate-400">{valueLabel}</span>
-        </p>
-      </div>
-      {rows.length === 0 ? (
-        <p className="p-4 text-sm text-slate-400">Nessun articolo in questo periodo.</p>
-      ) : (
-        <div className="divide-y divide-slate-100">
-          {shown.map((a) => (
-            <div key={a.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
-              <div className="min-w-0">
-                <p className="truncate font-medium text-slate-800">
-                  <span className="mr-1.5 font-mono text-xs text-slate-400">{padCode(a.code)}</span>
-                  {a.description}
-                </p>
-                <p className="text-xs text-slate-400">{formatDate(a[dateField])}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="font-semibold tabular-nums text-slate-800">{formatMoney(a[priceField])}</span>
-                <RowAction icon={Undo2} label={actionLabel} onClick={() => onAction(a)} danger={actionLabel === 'Elimina'} />
-              </div>
-            </div>
-          ))}
-          {rows.length > MOVEMENTS_LIMIT && (
-            <p className="p-3 text-center text-xs text-amber-600">Mostrati i primi {MOVEMENTS_LIMIT} di {rows.length}: restringi il periodo per vederli tutti.</p>
-          )}
-        </div>
-      )}
-    </Card>
-  )
-}
