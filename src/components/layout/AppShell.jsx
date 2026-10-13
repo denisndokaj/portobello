@@ -27,11 +27,11 @@ export default function AppShell() {
       }
       if (e.key === 'F2') {
         e.preventDefault()
-        navigate('/cassa')
+        navigate('/vendi')
       }
       if (e.key === 'F3') {
         e.preventDefault()
-        navigate('/segna-venduti')
+        navigate('/vendi?modo=ricerca')
       }
       if (!typing && e.altKey) {
         const item = NAV_ITEMS.find((n) => n.shortcut === e.key)

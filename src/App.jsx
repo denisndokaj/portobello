@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
-import { Routes, Route } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import AppShell from './components/layout/AppShell'
 import { useSettingsStore } from './store/useSettingsStore'
 
@@ -7,8 +7,7 @@ const Dashboard = lazy(() => import('./features/dashboard/Dashboard'))
 const VendorList = lazy(() => import('./features/vendors/VendorList'))
 const VendorDetail = lazy(() => import('./features/vendors/VendorDetail'))
 const ItemList = lazy(() => import('./features/items/ItemList'))
-const Pos = lazy(() => import('./features/pos/Pos'))
-const SalesSearch = lazy(() => import('./features/salesSearch/SalesSearch'))
+const SellPage = lazy(() => import('./features/sell/SellPage'))
 const SettlementList = lazy(() => import('./features/settlements/SettlementList'))
 const LabelPrinter = lazy(() => import('./features/labels/LabelPrinter'))
 const Registro = lazy(() => import('./features/reports/Registro'))
@@ -51,8 +50,9 @@ export default function App() {
           <Route path="/venditori" element={<VendorList />} />
           <Route path="/venditori/:id" element={<VendorDetail />} />
           <Route path="/articoli" element={<ItemList />} />
-          <Route path="/cassa" element={<Pos />} />
-          <Route path="/segna-venduti" element={<SalesSearch />} />
+          <Route path="/vendi" element={<SellPage />} />
+          <Route path="/cassa" element={<Navigate to="/vendi" replace />} />
+          <Route path="/segna-venduti" element={<Navigate to="/vendi?modo=ricerca" replace />} />
           <Route path="/distinte" element={<SettlementList />} />
           <Route path="/etichette" element={<LabelPrinter />} />
           <Route path="/registro" element={<Registro />} />

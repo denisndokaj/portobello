@@ -21,11 +21,11 @@ const MOVEMENT_FILTERS = [
  * up (a returned/withdrawn item never appears here as a sale). Shared by
  * the global Articoli page and a single vendor's page - the caller just
  * hands it the article set to work from (everything, or one vendor's). */
-export default function MovementsPanel({ articles, vendors = [], onCancelSale, onDelete, onEdit }) {
+export default function MovementsPanel({ articles, vendors = [], onCancelSale, onDelete, onEdit, lockFilter, hideRangePicker = false }) {
   const todayIso = new Date().toISOString().slice(0, 10)
   const [movFrom, setMovFrom] = useState(todayIso)
   const [movTo, setMovTo] = useState(todayIso)
-  const [movFilter, setMovFilter] = useState('entrambi')
+  const [movFilter, setMovFilter] = useState(lockFilter || 'entrambi')
   const vendorMap = useMemo(() => Object.fromEntries(vendors.filter(Boolean).map((v) => [v.id, v])), [vendors])
 
   const entrati = useMemo(
@@ -50,29 +50,33 @@ export default function MovementsPanel({ articles, vendors = [], onCancelSale, o
 
   return (
     <div className="space-y-4">
-      <Card className="flex flex-wrap items-end gap-3 p-3">
-        <Field label="Dal">
-          <Input type="date" value={movFrom} max={movTo} onChange={(e) => setMovFrom(e.target.value)} />
-        </Field>
-        <Field label="Al">
-          <Input type="date" value={movTo} min={movFrom} max={todayIso} onChange={(e) => setMovTo(e.target.value)} />
-        </Field>
-        <Button variant="secondary" size="sm" onClick={setToday} type="button">
-          Oggi
-        </Button>
-        <div className="ml-auto flex gap-1 rounded-lg bg-slate-100 p-1">
-          {MOVEMENT_FILTERS.map((f) => (
-            <button
-              key={f.value}
-              type="button"
-              onClick={() => setMovFilter(f.value)}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium ${movFilter === f.value ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      </Card>
+      {!hideRangePicker && (
+        <Card className="flex flex-wrap items-end gap-3 p-3">
+          <Field label="Dal">
+            <Input type="date" value={movFrom} max={movTo} onChange={(e) => setMovFrom(e.target.value)} />
+          </Field>
+          <Field label="Al">
+            <Input type="date" value={movTo} min={movFrom} max={todayIso} onChange={(e) => setMovTo(e.target.value)} />
+          </Field>
+          <Button variant="secondary" size="sm" onClick={setToday} type="button">
+            Oggi
+          </Button>
+          {!lockFilter && (
+            <div className="ml-auto flex gap-1 rounded-lg bg-slate-100 p-1">
+              {MOVEMENT_FILTERS.map((f) => (
+                <button
+                  key={f.value}
+                  type="button"
+                  onClick={() => setMovFilter(f.value)}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium ${movFilter === f.value ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
 
       {movFilter !== 'venduti' && (
         <MovementSection
