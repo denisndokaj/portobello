@@ -197,12 +197,18 @@ export function contractText(settings) {
 /** Active (not sold/withdrawn) articles within the expiry-warning window,
  * sorted by most urgent first. Shared by the Dashboard and the Articoli
  * "Scadenze" tab so both apply the exact same rule. */
+/** Articles approaching or past their mandate limit, each tagged
+ * `isExpired` so callers can tell "about to expire" (still sellable, just a
+ * heads-up) from "already past the mandate" (needs a decision: renew,
+ * return, or devolve) instead of lumping both into one list ordered with
+ * the most overdue first - which buries the imminent ones under however
+ * many genuinely-expired items the catalogue has. */
 export function getExpiringArticles(articles, settings) {
   const warnMonths = Number(settings.business.expiryWarningMonths || 0)
   const mandateMonths = Number(settings.business.mandateDurationMonths || 12)
   return articles
     .filter((a) => a.status !== 'venduto' && a.status !== 'ritirato')
-    .map((a) => ({ article: a, monthsElapsed: monthsBetween(effectiveLoadDate(a)) }))
+    .map((a) => ({ article: a, monthsElapsed: monthsBetween(effectiveLoadDate(a)), isExpired: monthsBetween(effectiveLoadDate(a)) >= mandateMonths }))
     .filter((x) => x.monthsElapsed >= mandateMonths - warnMonths)
     .sort((a, b) => b.monthsElapsed - a.monthsElapsed)
 }

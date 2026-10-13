@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [pending, setPending] = useState([])
   const [latest, setLatest] = useState([])
   const [expiring, setExpiring] = useState([])
+  const [expiringCount, setExpiringCount] = useState(0)
   const [vendorCount, setVendorCount] = useState(0)
   const [unlabeledCount, setUnlabeledCount] = useState(0)
 
@@ -36,7 +37,13 @@ export default function Dashboard() {
       setTopVendors(tv)
       setPending(p.slice(0, 8))
       setLatest(r)
-      setExpiring(getExpiringArticles(articles, settings).slice(0, 8))
+      // Not-yet-expired items are the time-sensitive ones (there's still a
+      // window to act), so the preview leads with those; already-expired
+      // stock only fills remaining slots. The full count (not the 8-item
+      // preview) is what the "N in scadenza o scaduti" action line uses.
+      const allExpiring = getExpiringArticles(articles, settings)
+      setExpiring([...allExpiring].sort((a, b) => Number(a.isExpired) - Number(b.isExpired)).slice(0, 8))
+      setExpiringCount(allExpiring.length)
       setVendorCount(vendors.length)
       setUnlabeledCount(articles.filter((a) => a.status === 'disponibile' && !a.labelPrintedAt).length)
     })()
@@ -48,7 +55,7 @@ export default function Dashboard() {
   const backupDue = daysSinceBackup === null || daysSinceBackup >= Number(settings.business.backupReminderDays || 7)
 
   const actions = [
-    expiring.length > 0 && { icon: AlertTriangle, text: `${expiring.length} articoli in scadenza o scaduti`, to: '/articoli', tone: 'text-amber-600' },
+    expiringCount > 0 && { icon: AlertTriangle, text: `${expiringCount} articoli in scadenza o scaduti`, to: '/articoli?view=scadenze', tone: 'text-amber-600' },
     summary.dueToVendors > 0 && { icon: Wallet, text: `${formatMoney(summary.dueToVendors)} da liquidare ai venditori`, to: '/distinte', tone: 'text-red-600' },
     unlabeledCount > 0 && { icon: TagIcon, text: `${unlabeledCount} articoli senza etichetta stampata`, to: '/etichette', tone: 'text-slate-600' },
     backupDue && { icon: Save, text: daysSinceBackup === null ? 'Nessun backup eseguito finora' : `Backup non eseguito da ${daysSinceBackup} giorni`, to: '/impostazioni', tone: 'text-slate-600' },
@@ -149,11 +156,16 @@ export default function Dashboard() {
           <CardHeader title="Articoli in scadenza" action={<PackageX size={16} className="text-slate-300" />} />
           <div className="divide-y divide-slate-100">
             {expiring.length === 0 && <p className="p-4 text-sm text-slate-400">Nessun articolo in scadenza.</p>}
-            {expiring.map(({ article }) => (
+            {expiring.map(({ article, isExpired }) => (
               <div key={article.id} className="flex items-center justify-between px-4 py-2 text-sm">
-                <span className="truncate">
+                <span className="min-w-0 truncate">
                   <span className="mr-1.5 font-mono text-xs text-slate-400">{padCode(article.code)}</span>
                   {article.description}
+                  {isExpired ? (
+                    <span className="ml-1.5 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">scaduto</span>
+                  ) : (
+                    <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">in scadenza</span>
+                  )}
                 </span>
                 <span className="shrink-0 text-xs text-slate-400">carico {formatDate(article.loadDate)}</span>
               </div>

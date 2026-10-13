@@ -47,6 +47,8 @@ export default function ItemList() {
   const todayIso = new Date().toISOString().slice(0, 10)
   const [movFrom, setMovFrom] = useState(todayIso)
   const [movTo, setMovTo] = useState(todayIso)
+  const [movFilter, setMovFilter] = useState('entrambi') // 'entrambi' | 'entrati' | 'venduti'
+  const [expiringFilter, setExpiringFilter] = useState('in_scadenza') // 'in_scadenza' | 'scaduti' | 'tutti'
   const [formOpen, setFormOpen] = useState(false)
   const [editArticle, setEditArticle] = useState(null)
   const [sellArticleTarget, setSellArticleTarget] = useState(null)
@@ -73,7 +75,13 @@ export default function ItemList() {
       setFormOpen(true)
       setParams({}, { replace: true })
     }
+    if (params.get('view') === 'scadenze') {
+      setView('scadenze')
+      setParams({}, { replace: true })
+    }
   }, [params])
+
+  useEffect(() => setPage(1), [view, filters, expiringFilter])
 
   const filtered = useMemo(() => {
     let rows = articles
@@ -89,6 +97,13 @@ export default function ItemList() {
   }, [articles, filters, settings])
 
   const expiring = useMemo(() => getExpiringArticles(articles, settings), [articles, settings])
+  const expiringInWarning = useMemo(() => expiring.filter((x) => !x.isExpired), [expiring])
+  const expiringExpired = useMemo(() => expiring.filter((x) => x.isExpired), [expiring])
+  const expiringRows = useMemo(() => {
+    if (expiringFilter === 'in_scadenza') return expiringInWarning
+    if (expiringFilter === 'scaduti') return expiringExpired
+    return expiring
+  }, [expiringFilter, expiring, expiringInWarning, expiringExpired])
 
   const movEntrati = useMemo(
     () => articles.filter((a) => a.loadDate >= movFrom && a.loadDate <= movTo).sort((a, b) => b.loadDate.localeCompare(a.loadDate)),
@@ -102,7 +117,7 @@ export default function ItemList() {
     [articles, movFrom, movTo],
   )
 
-  const rows = view === 'scadenze' ? expiring.map((x) => x.article) : filtered
+  const rows = view === 'scadenze' ? expiringRows.map((x) => x.article) : filtered
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
   const pageRows = rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
@@ -234,8 +249,43 @@ export default function ItemList() {
         </Card>
       )}
 
+      {view === 'scadenze' && (
+        <Card className="flex flex-wrap items-center gap-3 p-3">
+          <p className="text-xs text-slate-500">
+            "In scadenza" = non ancora scaduti ma entro la finestra di preavviso. "Scaduti" = oltre la durata del mandato.
+          </p>
+          <div className="ml-auto flex gap-1 rounded-lg bg-slate-100 p-1">
+            {[
+              { value: 'in_scadenza', label: `In scadenza (${expiringInWarning.length})` },
+              { value: 'scaduti', label: `Scaduti (${expiringExpired.length})` },
+              { value: 'tutti', label: `Tutti (${expiring.length})` },
+            ].map((f) => (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => setExpiringFilter(f.value)}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium ${expiringFilter === f.value ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {view === 'movimenti' && (
-        <MovementsView movFrom={movFrom} movTo={movTo} setMovFrom={setMovFrom} setMovTo={setMovTo} entrati={movEntrati} venduti={movVenduti} settings={settings} />
+        <MovementsView
+          movFrom={movFrom}
+          movTo={movTo}
+          setMovFrom={setMovFrom}
+          setMovTo={setMovTo}
+          movFilter={movFilter}
+          setMovFilter={setMovFilter}
+          entrati={movEntrati}
+          venduti={movVenduti}
+          onCancelSale={handleCancelSale}
+          onDelete={setDeleteTarget}
+        />
       )}
 
       {view !== 'movimenti' && (
@@ -408,7 +458,13 @@ const MOVEMENTS_LIMIT = 300
  * a log. Registro answers "what happened in the cash register"; this
  * answers "what physically moved" and needs no cash-register entry to show
  * up (a returned/withdrawn item never appears here as a sale). */
-function MovementsView({ movFrom, movTo, setMovFrom, setMovTo, entrati, venduti, settings }) {
+const MOVEMENT_FILTERS = [
+  { value: 'entrambi', label: 'Entrambi' },
+  { value: 'entrati', label: 'Solo entrati' },
+  { value: 'venduti', label: 'Solo venduti' },
+]
+
+function MovementsView({ movFrom, movTo, setMovFrom, setMovTo, movFilter, setMovFilter, entrati, venduti, onCancelSale, onDelete }) {
   const todayIso = new Date().toISOString().slice(0, 10)
   const entrantiValue = entrati.reduce((s, a) => s + (a.originalPrice || 0), 0)
   const vendutiValue = venduti.reduce((s, a) => s + (a.soldPrice || 0), 0)
@@ -430,37 +486,55 @@ function MovementsView({ movFrom, movTo, setMovFrom, setMovTo, entrati, venduti,
         <Button variant="secondary" size="sm" onClick={setToday} type="button">
           Oggi
         </Button>
+        <div className="ml-auto flex gap-1 rounded-lg bg-slate-100 p-1">
+          {MOVEMENT_FILTERS.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              onClick={() => setMovFilter(f.value)}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium ${movFilter === f.value ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
       </Card>
 
-      <MovementSection
-        icon={LogIn}
-        title="Entrati"
-        tone="text-brand-700"
-        count={entrati.length}
-        value={entrantiValue}
-        valueLabel="valore a listino"
-        rows={entrati}
-        dateField="loadDate"
-        priceField="originalPrice"
-        settings={settings}
-      />
-      <MovementSection
-        icon={LogOut}
-        title="Venduti"
-        tone="text-amber-700"
-        count={venduti.length}
-        value={vendutiValue}
-        valueLabel="incassato"
-        rows={venduti}
-        dateField="soldDate"
-        priceField="soldPrice"
-        settings={settings}
-      />
+      {movFilter !== 'venduti' && (
+        <MovementSection
+          icon={LogIn}
+          title="Entrati"
+          tone="text-brand-700"
+          count={entrati.length}
+          value={entrantiValue}
+          valueLabel="valore a listino"
+          rows={entrati}
+          dateField="loadDate"
+          priceField="originalPrice"
+          actionLabel="Elimina"
+          onAction={onDelete}
+        />
+      )}
+      {movFilter !== 'entrati' && (
+        <MovementSection
+          icon={LogOut}
+          title="Venduti"
+          tone="text-amber-700"
+          count={venduti.length}
+          value={vendutiValue}
+          valueLabel="incassato"
+          rows={venduti}
+          dateField="soldDate"
+          priceField="soldPrice"
+          actionLabel="Annulla vendita"
+          onAction={onCancelSale}
+        />
+      )}
     </div>
   )
 }
 
-function MovementSection({ icon: Icon, title, tone, count, value, valueLabel, rows, dateField, priceField }) {
+function MovementSection({ icon: Icon, title, tone, count, value, valueLabel, rows, dateField, priceField, actionLabel, onAction }) {
   const shown = rows.slice(0, MOVEMENTS_LIMIT)
   return (
     <Card className="overflow-hidden">
@@ -485,7 +559,10 @@ function MovementSection({ icon: Icon, title, tone, count, value, valueLabel, ro
                 </p>
                 <p className="text-xs text-slate-400">{formatDate(a[dateField])}</p>
               </div>
-              <span className="shrink-0 font-semibold tabular-nums text-slate-800">{formatMoney(a[priceField])}</span>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="font-semibold tabular-nums text-slate-800">{formatMoney(a[priceField])}</span>
+                <RowAction icon={Undo2} label={actionLabel} onClick={() => onAction(a)} danger={actionLabel === 'Elimina'} />
+              </div>
             </div>
           ))}
           {rows.length > MOVEMENTS_LIMIT && (
