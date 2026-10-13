@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { toast } from '../../store/useToastStore'
 import Card, { CardHeader } from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
+import Badge from '../../components/ui/Badge'
 import { Field, Input, Select, Textarea, Checkbox } from '../../components/ui/Field'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
-import { Plus, Trash2, Download, Upload, RotateCcw, ImagePlus, FileUp } from 'lucide-react'
+import { Plus, Trash2, Download, Upload, RotateCcw, ImagePlus, FileUp, ShieldCheck, ChevronDown, ChevronRight } from 'lucide-react'
 import { contractText, formatMoney, getCurrentPrice, round2 } from '../../lib/business'
 import { LABEL_PRESETS } from '../../lib/business'
 import { dumpDatabase, downloadJSON, restoreDatabase, listSnapshots, restoreSnapshot, autoBackup } from '../../lib/backup'
 import { downloadCSV } from '../../lib/exportUtils'
 import { db } from '../../lib/db'
+import { runDataIntegrityChecks } from '../../lib/dataIntegrity'
 import { resetAllData, setNextArticleCode, setNextInvoiceNumber, setNextUnnumberedNumber, getCounters } from '../../services'
 import { parseStaging, summarizeStaging, applyLegacyImport, repairReconstructedInvoiceDates } from '../../services/local/legacyImportService'
 
@@ -31,6 +34,9 @@ export default function SettingsPage() {
   const [legacyResult, setLegacyResult] = useState(null)
   const [repairBusy, setRepairBusy] = useState(false)
   const [repairResult, setRepairResult] = useState(null)
+  const [integrityBusy, setIntegrityBusy] = useState(false)
+  const [integrityReport, setIntegrityReport] = useState(null)
+  const [expandedCheck, setExpandedCheck] = useState(null)
 
   useEffect(() => setForm(storeSettings), [storeSettings])
   useEffect(() => {
@@ -155,6 +161,18 @@ export default function SettingsPage() {
       toast(err.message || 'Errore durante la correzione', 'error')
     } finally {
       setRepairBusy(false)
+    }
+  }
+
+  async function handleRunIntegrityCheck() {
+    setIntegrityBusy(true)
+    try {
+      const report = await runDataIntegrityChecks()
+      setIntegrityReport(report)
+      setExpandedCheck(null)
+      toast(report.problemCount ? `Trovate ${report.problemCount} anomalie` : 'Nessuna anomalia trovata', report.problemCount ? 'info' : 'success')
+    } finally {
+      setIntegrityBusy(false)
     }
   }
 
@@ -422,6 +440,56 @@ export default function SettingsPage() {
         onCancel={() => setConfirmLegacyImport(false)}
         onConfirm={handleConfirmLegacyImport}
       />
+
+      <Card>
+        <CardHeader
+          title="Diagnostica dati"
+          subtitle="Controlla l'archivio alla ricerca di incongruenze: date impossibili, record collegati a venditori inesistenti, prezzi mancanti, duplicati"
+          action={
+            <Button size="sm" variant="secondary" onClick={handleRunIntegrityCheck} disabled={integrityBusy} type="button">
+              <ShieldCheck size={14} /> {integrityBusy ? 'Verifica in corso...' : 'Esegui verifica'}
+            </Button>
+          }
+        />
+        {integrityReport && (
+          <div className="divide-y divide-slate-100">
+            <p className="px-4 py-2 text-xs text-slate-400">
+              Verificato il {new Date(integrityReport.ranAt).toLocaleString('it-IT')} — {integrityReport.totals.vendors} venditori, {integrityReport.totals.articles} articoli,{' '}
+              {integrityReport.totals.invoices} fatture.
+            </p>
+            {integrityReport.checks.map((c) => (
+              <div key={c.key}>
+                <button
+                  type="button"
+                  onClick={() => c.count > 0 && setExpandedCheck((k) => (k === c.key ? null : c.key))}
+                  className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left"
+                >
+                  <span className="flex items-center gap-1.5 text-sm text-slate-700">
+                    {c.count > 0 && (expandedCheck === c.key ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />)}
+                    {c.title}
+                  </span>
+                  <Badge tone={c.severity === 'ok' ? 'bg-brand-100 text-brand-800' : 'bg-amber-100 text-amber-800'}>{c.count}</Badge>
+                </button>
+                {expandedCheck === c.key && c.count > 0 && (
+                  <div className="space-y-1 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                    <p className="mb-2 text-slate-400">{c.detail}</p>
+                    {c.items.slice(0, 50).map((item, i) =>
+                      item.to ? (
+                        <Link key={i} to={item.to} className="block text-brand-700 hover:underline">
+                          {item.label}
+                        </Link>
+                      ) : (
+                        <p key={i}>{item.label}</p>
+                      ),
+                    )}
+                    {c.count > 50 && <p className="text-slate-400">... e altri {c.count - 50}.</p>}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       <Card>
         <CardHeader title="Dati e backup" />
