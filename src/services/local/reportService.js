@@ -61,10 +61,13 @@ export async function recentSales(limit = 8) {
 
 export async function dashboardSummary() {
   const [vendors, articles, invoices] = await Promise.all([db.vendors.toArray(), db.articles.toArray(), db.invoices.toArray()])
-  const now = new Date()
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10)
-  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().slice(0, 10)
-  const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().slice(0, 10)
+  const todayIso = new Date().toISOString().slice(0, 10)
+  const monthStart = todayIso.slice(0, 8) + '01'
+  const [y, m] = todayIso.slice(0, 7).split('-').map(Number)
+  const prevMonthDate = new Date(Date.UTC(y, m - 2, 1))
+  const prevMonthStart = `${prevMonthDate.getUTCFullYear()}-${String(prevMonthDate.getUTCMonth() + 1).padStart(2, '0')}-01`
+  const prevMonthEndDay = new Date(Date.UTC(y, m - 1, 0)).getUTCDate()
+  const prevMonthEnd = `${prevMonthDate.getUTCFullYear()}-${String(prevMonthDate.getUTCMonth() + 1).padStart(2, '0')}-${String(prevMonthEndDay).padStart(2, '0')}`
 
   const sold = articles.filter((a) => a.status === 'venduto')
   const soldThisMonth = sold.filter((a) => a.soldDate >= monthStart)

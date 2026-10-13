@@ -102,6 +102,19 @@ export async function getInvoice(id) {
   return db.invoices.get(Number(id))
 }
 
+/** Undoes a fattura's generation entirely: the record disappears from the
+ * list and its total, and whatever articles it covered go back to being
+ * "da liquidare" (nothing on the articles themselves changes - the sale
+ * stays a sale, only the settlement document is removed). Regenerating for
+ * the same vendor/period later gets a fresh number; numbers are never
+ * reused once issued. */
+export async function deleteInvoice(id) {
+  const inv = await db.invoices.get(Number(id))
+  if (!inv) return
+  await db.invoices.delete(Number(id))
+  await addLog('fattura_eliminata', `Fattura #${inv.number} eliminata (${inv.from} – ${inv.to})`, { vendorId: inv.vendorId })
+}
+
 export async function getInvoiceArticles(invoice) {
   const rows = await db.articles.bulkGet(invoice.articleIds)
   return rows.filter(Boolean).sort((a, b) => (a.soldDate || '').localeCompare(b.soldDate || ''))
@@ -135,8 +148,7 @@ export function invoiceNumberLabel(invoice, settings) {
 
 export async function nextSettlementDefaults() {
   const settings = await getSettings()
-  const today = new Date()
-  const to = today.toISOString().slice(0, 10)
-  const from = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10)
+  const to = new Date().toISOString().slice(0, 10)
+  const from = to.slice(0, 8) + '01'
   return { from, to, settings }
 }

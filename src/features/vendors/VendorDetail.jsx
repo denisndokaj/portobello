@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Pencil, Trash2, FileDown, MessageCircle, Mail, Wallet, Plus } from 'lucide-react'
-import { getVendor, vendorStats, deleteVendor, listArticles, listInvoices, getOrCreateInvoice, cancelSale, deleteArticle } from '../../services'
+import { getVendor, vendorStats, deleteVendor, listArticles, listInvoices, getOrCreateInvoice, deleteInvoice, cancelSale, deleteArticle } from '../../services'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { toast } from '../../store/useToastStore'
 import Stat from '../../components/ui/Stat'
@@ -37,6 +37,7 @@ export default function VendorDetail() {
   const [editArticle, setEditArticle] = useState(null)
   const [itemFormOpen, setItemFormOpen] = useState(false)
   const [deleteArticleTarget, setDeleteArticleTarget] = useState(null)
+  const [articleFilter, setArticleFilter] = useState('attivi') // 'attivi' | 'scaduti' | 'venduti' | 'tutti'
 
   function openArticle(article) {
     setEditArticle(article)
@@ -78,6 +79,16 @@ export default function VendorDetail() {
       setConfirmDelete(false)
     }
   }
+
+  const filteredArticles = useMemo(() => {
+    if (articleFilter === 'tutti') return articles
+    if (articleFilter === 'venduti') return articles.filter((a) => a.status === 'venduto')
+    if (articleFilter === 'scaduti') return articles.filter((a) => getArticleStatus(a, settings).status === 'scaduto')
+    return articles.filter((a) => {
+      const st = getArticleStatus(a, settings).status
+      return st === 'disponibile' || st === 'sconto'
+    })
+  }, [articles, articleFilter, settings])
 
   if (!vendor || !stats) return <p className="text-sm text-slate-400">Caricamento...</p>
 
@@ -133,15 +144,34 @@ export default function VendorDetail() {
 
       {tab === 'Articoli' && (
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <ReceiptButton vendor={vendor} settings={settings} />
-            <Button size="sm" onClick={() => setQuickAddOpen(true)}>
-              <Plus size={14} /> Aggiungi articoli
-            </Button>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+              {[
+                ['attivi', 'Attivi'],
+                ['scaduti', 'Scaduti'],
+                ['venduti', 'Venduti'],
+                ['tutti', 'Tutti'],
+              ].map(([v, label]) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setArticleFilter(v)}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium ${articleFilter === v ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <ReceiptButton vendor={vendor} settings={settings} />
+              <Button size="sm" onClick={() => setQuickAddOpen(true)}>
+                <Plus size={14} /> Aggiungi articoli
+              </Button>
+            </div>
           </div>
           <Card className="divide-y divide-slate-100 overflow-hidden">
-            {articles.length === 0 && <p className="p-4 text-sm text-slate-400">Nessun articolo per questo venditore.</p>}
-          {articles.map((a) => {
+            {filteredArticles.length === 0 && <p className="p-4 text-sm text-slate-400">Nessun articolo in questa categoria.</p>}
+          {filteredArticles.map((a) => {
             const st = getArticleStatus(a, settings)
             return (
               <button key={a.id} onClick={() => openArticle(a)} className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-slate-50">
@@ -281,10 +311,18 @@ function SettlementsTab({ vendorId, invoices, settings, reload }) {
   const monthStart = new Date().toISOString().slice(0, 8) + '01'
   const [from, setFrom] = useState(monthStart)
   const [to, setTo] = useState(today)
+  const [deleteTarget, setDeleteTarget] = useState(null)
 
   async function handleGenerate() {
     await getOrCreateInvoice(vendorId, from, to)
     toast('Fattura generata/aggiornata', 'success')
+    reload()
+  }
+
+  async function handleDeleteInvoice() {
+    await deleteInvoice(deleteTarget.id)
+    toast('Fattura eliminata', 'success')
+    setDeleteTarget(null)
     reload()
   }
 
@@ -316,10 +354,26 @@ function SettlementsTab({ vendorId, invoices, settings, reload }) {
             <div className="flex items-center gap-2">
               <Badge tone={inv.paid ? 'bg-brand-100 text-brand-800' : 'bg-amber-100 text-amber-800'}>{inv.paid ? 'Pagata' : 'Da liquidare'}</Badge>
               <span className="w-20 text-right text-sm font-medium tabular-nums">{formatMoney(inv.vendorShare)}</span>
+              <button onClick={() => setDeleteTarget(inv)} className="rounded-full p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-500">
+                <Trash2 size={14} />
+              </button>
             </div>
           </div>
         ))}
       </Card>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Elimina fattura"
+        danger
+        requireText={deleteTarget?.paid ? 'ELIMINA' : undefined}
+        message={
+          deleteTarget?.paid
+            ? "Questa fattura risulta pagata. Eliminandola, l'importo tornerà a comparire come da liquidare per il venditore. Gli articoli venduti non vengono toccati."
+            : 'La fattura verrà eliminata e non comparirà più nel conto. Gli articoli venduti non vengono toccati.'
+        }
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteInvoice}
+      />
     </div>
   )
 }

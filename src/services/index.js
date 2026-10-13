@@ -46,6 +46,7 @@ export const {
   getInvoiceArticles,
   payInvoice,
   cancelPayment,
+  deleteInvoice,
   invoiceNumberLabel,
   nextSettlementDefaults,
   salesByMonth,

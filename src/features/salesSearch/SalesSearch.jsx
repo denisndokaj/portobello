@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CheckSquare, Search, Undo2 } from 'lucide-react'
-import { listArticles, sellArticle, cancelSale } from '../../services'
+import { listArticles, listVendors, sellArticle, cancelSale } from '../../services'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { toast } from '../../store/useToastStore'
 import { Input, Checkbox } from '../../components/ui/Field'
@@ -8,7 +8,7 @@ import Button from '../../components/ui/Button'
 import Card, { CardHeader } from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
 import VendorPicker from '../../components/VendorPicker'
-import { formatMoney, padCode, getArticleStatus, getCurrentPrice, ARTICLE_STATUS_COLORS } from '../../lib/business'
+import { formatMoney, formatDate, padCode, getArticleStatus, getCurrentPrice, ARTICLE_STATUS_COLORS } from '../../lib/business'
 
 const RESULT_LIMIT = 200
 
@@ -18,6 +18,7 @@ export default function SalesSearch() {
   const [vendorId, setVendorId] = useState(null)
   const [showSold, setShowSold] = useState(false)
   const [articles, setArticles] = useState([])
+  const [vendors, setVendors] = useState([])
   const [selected, setSelected] = useState({})
   const [prices, setPrices] = useState({})
   const [saleDate, setSaleDate] = useState(new Date().toISOString().slice(0, 10))
@@ -25,10 +26,13 @@ export default function SalesSearch() {
 
   async function reload() {
     setArticles(await listArticles({}))
+    setVendors(await listVendors())
   }
   useEffect(() => {
     reload()
   }, [])
+
+  const vendorMap = useMemo(() => Object.fromEntries(vendors.map((v) => [v.id, v])), [vendors])
 
   const results = useMemo(() => {
     let rows = articles
@@ -117,6 +121,7 @@ export default function SalesSearch() {
         {results.map((a) => {
           const st = getArticleStatus(a, settings)
           const sold = a.status === 'venduto'
+          const vendor = vendorMap[a.vendorId]
           return (
             <div key={a.id} className="flex items-center gap-3 px-4 py-2.5">
               {!sold && <input type="checkbox" className="size-4 rounded border-slate-300 text-brand-600" checked={!!selected[a.id]} onChange={() => toggleSelect(a)} />}
@@ -125,7 +130,16 @@ export default function SalesSearch() {
                   <span className="mr-1.5 font-mono text-xs text-slate-400">{padCode(a.code)}</span>
                   {a.description}
                 </p>
-                <Badge tone={ARTICLE_STATUS_COLORS[st.status]} className="mt-0.5">
+                <p className="mt-0.5 truncate text-xs text-slate-400">
+                  Carico {formatDate(a.loadDate)}
+                  {vendor && (
+                    <>
+                      {' · '}
+                      {vendor.name} {vendor.surname}
+                    </>
+                  )}
+                </p>
+                <Badge tone={ARTICLE_STATUS_COLORS[st.status]} className="mt-1">
                   {st.label}
                 </Badge>
               </div>

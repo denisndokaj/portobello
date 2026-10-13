@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { FileText, Plus, Download, FileDown, Wallet, Ban, Printer } from 'lucide-react'
-import { listInvoices, listVendors, getOrCreateInvoice, getInvoiceArticles, cancelPayment, vendorsWithSalesInPeriod, generateMonthlyInvoices } from '../../services'
+import { FileText, Plus, Download, FileDown, Wallet, Ban, Printer, Trash2 } from 'lucide-react'
+import { listInvoices, listVendors, getOrCreateInvoice, getInvoiceArticles, cancelPayment, deleteInvoice, vendorsWithSalesInPeriod, generateMonthlyInvoices } from '../../services'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { toast } from '../../store/useToastStore'
 import Card, { CardHeader } from '../../components/ui/Card'
@@ -32,6 +32,7 @@ export default function SettlementList() {
   const [newOpen, setNewOpen] = useState(false)
   const [payTarget, setPayTarget] = useState(null)
   const [cancelTarget, setCancelTarget] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
   const [bulkMonth, setBulkMonth] = useState(new Date().toISOString().slice(0, 7))
   const [bulkBusy, setBulkBusy] = useState(false)
 
@@ -98,6 +99,13 @@ export default function SettlementList() {
     await cancelPayment(cancelTarget.id)
     toast('Pagamento annullato', 'success')
     setCancelTarget(null)
+    reload()
+  }
+
+  async function handleDeleteInvoice() {
+    await deleteInvoice(deleteTarget.id)
+    toast('Fattura eliminata', 'success')
+    setDeleteTarget(null)
     reload()
   }
 
@@ -188,6 +196,9 @@ export default function SettlementList() {
                     <Wallet size={14} /> Paga
                   </Button>
                 )}
+                <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(inv)}>
+                  <Trash2 size={14} />
+                </Button>
               </div>
             </div>
           )
@@ -209,6 +220,19 @@ export default function SettlementList() {
         message="La fattura tornerà nello stato 'da liquidare'."
         onCancel={() => setCancelTarget(null)}
         onConfirm={handleCancelPayment}
+      />
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Elimina fattura"
+        danger
+        requireText={deleteTarget?.paid ? 'ELIMINA' : undefined}
+        message={
+          deleteTarget?.paid
+            ? "Questa fattura risulta pagata. Eliminandola, l'importo tornerà a comparire come da liquidare per il venditore. Gli articoli venduti non vengono toccati."
+            : 'La fattura verrà eliminata e non comparirà più nel conto. Gli articoli venduti non vengono toccati.'
+        }
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteInvoice}
       />
     </div>
   )
