@@ -194,7 +194,7 @@ export default function VendorDetail() {
       )}
 
       {tab === 'Movimenti' && (
-        <MovementsPanel articles={articles} onCancelSale={handleCancelArticleSale} onDelete={setDeleteArticleTarget} onEdit={openArticle} />
+        <MovementsPanel articles={articles} vendors={[vendor]} onCancelSale={handleCancelArticleSale} onDelete={setDeleteArticleTarget} onEdit={openArticle} />
       )}
 
       {tab === 'Mandato' && <MandateTab vendor={vendor} settings={settings} />}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   Plus,
   Search,
@@ -16,10 +16,10 @@ import {
   Coins,
   CalendarRange,
 } from 'lucide-react'
-import { listArticles, listCategories, cancelSale, revertRitiro, deleteArticle, extendMandate, getArticleByCode, bulkSetCategory } from '../../services'
+import { listArticles, listCategories, listVendors, cancelSale, revertRitiro, deleteArticle, extendMandate, getArticleByCode, bulkSetCategory } from '../../services'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { toast } from '../../store/useToastStore'
-import { Input, Select } from '../../components/ui/Field'
+import { Field, Input, Select } from '../../components/ui/Field'
 import Button from '../../components/ui/Button'
 import Card from '../../components/ui/Card'
 import Badge from '../../components/ui/Badge'
@@ -40,7 +40,8 @@ export default function ItemList() {
   const settings = useSettingsStore((s) => s.settings)
   const [articles, setArticles] = useState([])
   const [categories, setCategories] = useState([])
-  const [filters, setFilters] = useState({ code: '', text: '', vendorId: null, status: '', category: '' })
+  const [vendors, setVendors] = useState([])
+  const [filters, setFilters] = useState({ code: '', text: '', vendorId: null, status: '', category: '', dateFrom: '', dateTo: '' })
   const [page, setPage] = useState(1)
   const [view, setView] = useState('tutti') // 'tutti' | 'scadenze' | 'movimenti'
   const [expiringFilter, setExpiringFilter] = useState('in_scadenza') // 'in_scadenza' | 'scaduti' | 'tutti'
@@ -59,6 +60,7 @@ export default function ItemList() {
   async function reload() {
     setArticles(await listArticles({}))
     setCategories(await listCategories())
+    setVendors(await listVendors())
   }
 
   useEffect(() => {
@@ -88,8 +90,12 @@ export default function ItemList() {
     if (filters.vendorId) rows = rows.filter((a) => a.vendorId === filters.vendorId)
     if (filters.category) rows = rows.filter((a) => a.category === filters.category)
     if (filters.status) rows = rows.filter((a) => getArticleStatus(a, settings).status === filters.status)
+    if (filters.dateFrom) rows = rows.filter((a) => a.loadDate >= filters.dateFrom)
+    if (filters.dateTo) rows = rows.filter((a) => a.loadDate <= filters.dateTo)
     return rows.sort((a, b) => b.code - a.code)
   }, [articles, filters, settings])
+
+  const vendorMap = useMemo(() => Object.fromEntries(vendors.map((v) => [v.id, v])), [vendors])
 
   const expiring = useMemo(() => getExpiringArticles(articles, settings), [articles, settings])
   const expiringInWarning = useMemo(() => expiring.filter((x) => !x.isExpired), [expiring])
@@ -229,6 +235,12 @@ export default function ItemList() {
               </option>
             ))}
           </Select>
+          <Field label="Carico dal" className="sm:col-span-1">
+            <Input type="date" value={filters.dateFrom} max={filters.dateTo || undefined} onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))} />
+          </Field>
+          <Field label="Carico al" className="sm:col-span-1">
+            <Input type="date" value={filters.dateTo} min={filters.dateFrom || undefined} onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))} />
+          </Field>
         </Card>
       )}
 
@@ -259,6 +271,7 @@ export default function ItemList() {
       {view === 'movimenti' && (
         <MovementsPanel
           articles={articles}
+          vendors={vendors}
           onCancelSale={handleCancelSale}
           onDelete={setDeleteTarget}
           onEdit={(a) => {
@@ -325,6 +338,7 @@ export default function ItemList() {
         <Card className="divide-y divide-slate-100 overflow-hidden">
           {pageRows.map((a) => {
             const st = getArticleStatus(a, settings)
+            const vendor = vendorMap[a.vendorId]
             return (
               <div key={a.id} className="px-4 py-3">
                 <div className="flex items-start justify-between gap-3">
@@ -342,6 +356,14 @@ export default function ItemList() {
                     <p className="text-xs text-slate-400">
                       {a.category && <span className="mr-2">{a.category}</span>}
                       Carico {formatDate(a.loadDate)}
+                      {vendor && (
+                        <>
+                          {' · '}
+                          <Link to={`/venditori/${vendor.id}`} className="text-brand-700 hover:underline" onClick={(e) => e.stopPropagation()}>
+                            {vendor.name} {vendor.surname}
+                          </Link>
+                        </>
+                      )}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">

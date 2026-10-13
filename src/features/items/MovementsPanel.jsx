@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { LogIn, LogOut, Pencil, Undo2 } from 'lucide-react'
 import Card from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
@@ -20,11 +21,12 @@ const MOVEMENT_FILTERS = [
  * up (a returned/withdrawn item never appears here as a sale). Shared by
  * the global Articoli page and a single vendor's page - the caller just
  * hands it the article set to work from (everything, or one vendor's). */
-export default function MovementsPanel({ articles, onCancelSale, onDelete, onEdit }) {
+export default function MovementsPanel({ articles, vendors = [], onCancelSale, onDelete, onEdit }) {
   const todayIso = new Date().toISOString().slice(0, 10)
   const [movFrom, setMovFrom] = useState(todayIso)
   const [movTo, setMovTo] = useState(todayIso)
   const [movFilter, setMovFilter] = useState('entrambi')
+  const vendorMap = useMemo(() => Object.fromEntries(vendors.filter(Boolean).map((v) => [v.id, v])), [vendors])
 
   const entrati = useMemo(
     () => articles.filter((a) => a.loadDate >= movFrom && a.loadDate <= movTo).sort((a, b) => b.loadDate.localeCompare(a.loadDate)),
@@ -86,6 +88,7 @@ export default function MovementsPanel({ articles, onCancelSale, onDelete, onEdi
           actionLabel="Elimina"
           onAction={onDelete}
           onEdit={onEdit}
+          vendorMap={vendorMap}
         />
       )}
       {movFilter !== 'entrati' && (
@@ -102,13 +105,14 @@ export default function MovementsPanel({ articles, onCancelSale, onDelete, onEdi
           actionLabel="Annulla vendita"
           onAction={onCancelSale}
           onEdit={onEdit}
+          vendorMap={vendorMap}
         />
       )}
     </div>
   )
 }
 
-function MovementSection({ icon: Icon, title, tone, count, value, valueLabel, rows, dateField, priceField, actionLabel, onAction, onEdit }) {
+function MovementSection({ icon: Icon, title, tone, count, value, valueLabel, rows, dateField, priceField, actionLabel, onAction, onEdit, vendorMap = {} }) {
   const shown = rows.slice(0, MOVEMENTS_LIMIT)
   return (
     <Card className="overflow-hidden">
@@ -124,46 +128,61 @@ function MovementSection({ icon: Icon, title, tone, count, value, valueLabel, ro
         <p className="p-4 text-sm text-slate-400">Nessun articolo in questo periodo.</p>
       ) : (
         <div className="divide-y divide-slate-100">
-          {shown.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              onClick={() => onEdit(a)}
-              className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm hover:bg-slate-50"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-medium text-slate-800">
-                  <span className="mr-1.5 font-mono text-xs text-slate-400">{padCode(a.code)}</span>
-                  {a.description}
-                </p>
-                <p className="text-xs text-slate-400">{formatDate(a[dateField])}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <span className="font-semibold tabular-nums text-slate-800">{formatMoney(a[priceField])}</span>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onAction(a)
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
+          {shown.map((a) => {
+            const vendor = vendorMap[a.vendorId]
+            return (
+              <div
+                key={a.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => onEdit(a)}
+                onKeyDown={(e) => e.key === 'Enter' && onEdit(a)}
+                className="flex w-full cursor-pointer items-center justify-between gap-3 px-4 py-2.5 text-left text-sm hover:bg-slate-50"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-slate-800">
+                    <span className="mr-1.5 font-mono text-xs text-slate-400">{padCode(a.code)}</span>
+                    {a.description}
+                  </p>
+                  <p className="text-xs text-slate-400">
+                    {formatDate(a[dateField])}
+                    {vendor && (
+                      <>
+                        {' · '}
+                        <Link to={`/venditori/${vendor.id}`} className="text-brand-700 hover:underline" onClick={(e) => e.stopPropagation()}>
+                          {vendor.name} {vendor.surname}
+                        </Link>
+                      </>
+                    )}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="font-semibold tabular-nums text-slate-800">{formatMoney(a[priceField])}</span>
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
                       e.stopPropagation()
                       onAction(a)
-                    }
-                  }}
-                  className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${
-                    actionLabel === 'Elimina' ? 'border-red-200 text-red-600 hover:bg-red-50' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <Undo2 size={13} />
-                  {actionLabel}
-                </span>
-                <Pencil size={14} className="text-slate-300" />
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.stopPropagation()
+                        onAction(a)
+                      }
+                    }}
+                    className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${
+                      actionLabel === 'Elimina' ? 'border-red-200 text-red-600 hover:bg-red-50' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Undo2 size={13} />
+                    {actionLabel}
+                  </span>
+                  <Pencil size={14} className="text-slate-300" />
+                </div>
               </div>
-            </button>
-          ))}
+            )
+          })}
           {rows.length > MOVEMENTS_LIMIT && (
             <p className="p-3 text-center text-xs text-amber-600">
               Mostrati i primi {MOVEMENTS_LIMIT} di {rows.length}: restringi il periodo per vederli tutti.
