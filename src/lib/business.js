@@ -107,6 +107,48 @@ export function splitNet(totalNet, commissionPercent) {
   return { shopShare, vendorShare: round2(totalNet - shopShare) }
 }
 
+const SIMILARITY_STOPWORDS = new Set(['DI', 'DA', 'CON', 'PER', 'DEL', 'DELLA', 'DELLO', 'DEI', 'DEGLI', 'SET'])
+
+function descriptionTokens(text) {
+  return (text || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9ÀÈÉÌÒÙ\s]/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length >= 3 && !SIMILARITY_STOPWORDS.has(t))
+}
+
+/** Suggests a price for a new/edited article by averaging what articles
+ * with a similar description were listed at and actually sold for -
+ * "similar" meaning they share at least half their significant words
+ * (Jaccard overlap on tokens >=3 chars, common filler words ignored).
+ * Returns null when there isn't enough signal rather than a misleading
+ * guess from one coincidental word match. */
+export function suggestPriceForDescription(description, articles, { excludeId, minScore = 0.5, limit = 50 } = {}) {
+  const tokens = descriptionTokens(description)
+  if (tokens.length === 0) return null
+  const tokenSet = new Set(tokens)
+
+  const scored = []
+  for (const a of articles) {
+    if (excludeId && a.id === excludeId) continue
+    const aTokens = descriptionTokens(a.description)
+    if (!aTokens.length) continue
+    const overlap = aTokens.filter((t) => tokenSet.has(t)).length
+    if (!overlap) continue
+    const score = overlap / Math.max(tokens.length, aTokens.length)
+    if (score >= minScore) scored.push({ article: a, score })
+  }
+  if (!scored.length) return null
+
+  scored.sort((x, y) => y.score - x.score)
+  const matches = scored.slice(0, limit).map((s) => s.article)
+  const avgOriginal = round2(matches.reduce((s, a) => s + (a.originalPrice || 0), 0) / matches.length)
+  const sold = matches.filter((a) => a.status === 'venduto' && a.soldPrice != null)
+  const avgSold = sold.length ? round2(sold.reduce((s, a) => s + a.soldPrice, 0) / sold.length) : null
+
+  return { matchCount: matches.length, avgOriginal, soldCount: sold.length, avgSold }
+}
+
 /** A vendor is flagged for manual review when its notes carry one of the
  * markers the legacy-import conversion writes for uncertain data (a name
  * split guessed from a compound full name, or a profile rebuilt from a

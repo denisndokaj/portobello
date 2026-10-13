@@ -1,12 +1,12 @@
-import { useState } from 'react'
-import { Plus, Trash2, Printer, FileDown } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Plus, Trash2, Printer, FileDown, Lightbulb } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import Button from '../../components/ui/Button'
 import { Field, Input, Checkbox } from '../../components/ui/Field'
-import { createArticle, getArticle, deleteArticle, markLabelPrinted } from '../../services'
+import { createArticle, getArticle, deleteArticle, markLabelPrinted, listArticles } from '../../services'
 import { toast } from '../../store/useToastStore'
 import { useSettingsStore } from '../../store/useSettingsStore'
-import { padCode, formatMoney } from '../../lib/business'
+import { padCode, formatMoney, suggestPriceForDescription } from '../../lib/business'
 import { generateReceiptPdf } from '../../lib/invoicePdf'
 import LabelSheet from '../labels/LabelSheet'
 
@@ -20,6 +20,19 @@ export default function QuickAddArticlesModal({ open, onClose, vendor, onDone })
   const [form, setForm] = useState(emptyForm)
   const [session, setSession] = useState([])
   const [saving, setSaving] = useState(false)
+  const [allArticles, setAllArticles] = useState([])
+  const [debouncedDescription, setDebouncedDescription] = useState('')
+
+  useEffect(() => {
+    if (open) listArticles({}).then(setAllArticles)
+  }, [open])
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedDescription(form.description), 350)
+    return () => clearTimeout(t)
+  }, [form.description])
+
+  const priceSuggestion = useMemo(() => suggestPriceForDescription(debouncedDescription, allArticles), [debouncedDescription, allArticles])
 
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }))
   const today = new Date().toISOString().slice(0, 10)
@@ -108,6 +121,29 @@ export default function QuickAddArticlesModal({ open, onClose, vendor, onDone })
         <Field label="Prezzo originale (€) *">
           <Input type="number" step="0.01" min={0} value={form.originalPrice} onChange={(e) => set('originalPrice', e.target.value)} />
         </Field>
+        {priceSuggestion && (
+          <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-900 sm:col-span-2">
+            <Lightbulb size={14} className="mt-0.5 shrink-0 text-amber-500" />
+            <div className="flex-1">
+              <p>
+                {priceSuggestion.matchCount} articoli simili, media listino <strong>{formatMoney(priceSuggestion.avgOriginal)}</strong>
+                {priceSuggestion.soldCount > 0 && (
+                  <>
+                    {' '}
+                    · venduti a <strong>{formatMoney(priceSuggestion.avgSold)}</strong> ({priceSuggestion.soldCount})
+                  </>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="shrink-0 font-medium text-amber-700 hover:underline"
+              onClick={() => set('originalPrice', priceSuggestion.soldCount > 0 ? priceSuggestion.avgSold : priceSuggestion.avgOriginal)}
+            >
+              Usa {formatMoney(priceSuggestion.soldCount > 0 ? priceSuggestion.avgSold : priceSuggestion.avgOriginal)}
+            </button>
+          </div>
+        )}
         <Field label="Categoria">
           <Input value={form.category} onChange={(e) => set('category', e.target.value)} />
         </Field>

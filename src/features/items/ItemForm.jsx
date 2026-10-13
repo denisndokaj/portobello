@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Lightbulb } from 'lucide-react'
 import Modal from '../../components/ui/Modal'
 import Button from '../../components/ui/Button'
 import { Field, Input, Textarea, Checkbox } from '../../components/ui/Field'
 import VendorPicker from '../../components/VendorPicker'
-import { createArticle, updateArticle, listCategories } from '../../services'
+import { createArticle, updateArticle, listCategories, listArticles } from '../../services'
 import { toast } from '../../store/useToastStore'
-import { padCode } from '../../lib/business'
+import { padCode, formatMoney, suggestPriceForDescription } from '../../lib/business'
 
 const empty = {
   vendorId: null,
@@ -21,14 +22,27 @@ const empty = {
 export default function ItemForm({ open, onClose, article, defaultVendorId, onSaved }) {
   const [form, setForm] = useState(empty)
   const [categories, setCategories] = useState([])
+  const [allArticles, setAllArticles] = useState([])
+  const [debouncedDescription, setDebouncedDescription] = useState('')
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     if (open) {
       setForm(article ? { ...empty, ...article, originalPrice: article.originalPrice, priceOverride: article.priceOverride ?? '' } : { ...empty, vendorId: defaultVendorId || null })
       listCategories().then(setCategories)
+      listArticles({}).then(setAllArticles)
     }
   }, [article, open, defaultVendorId])
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedDescription(form.description), 350)
+    return () => clearTimeout(t)
+  }, [form.description])
+
+  const priceSuggestion = useMemo(
+    () => suggestPriceForDescription(debouncedDescription, allArticles, { excludeId: article?.id }),
+    [debouncedDescription, allArticles, article],
+  )
 
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }))
   const today = new Date().toISOString().slice(0, 10)
@@ -95,6 +109,29 @@ export default function ItemForm({ open, onClose, article, defaultVendorId, onSa
         <Field label="Prezzo originale (€) *">
           <Input type="number" step="0.01" min={0} value={form.originalPrice} onChange={(e) => set('originalPrice', e.target.value)} />
         </Field>
+        {priceSuggestion && (
+          <div className="flex items-start gap-2 rounded-lg bg-amber-50 p-2.5 text-xs text-amber-900 sm:col-span-2">
+            <Lightbulb size={14} className="mt-0.5 shrink-0 text-amber-500" />
+            <div className="flex-1">
+              <p>
+                {priceSuggestion.matchCount} articoli simili, prezzo medio a listino <strong>{formatMoney(priceSuggestion.avgOriginal)}</strong>
+                {priceSuggestion.soldCount > 0 && (
+                  <>
+                    {' '}
+                    · venduti in media a <strong>{formatMoney(priceSuggestion.avgSold)}</strong> ({priceSuggestion.soldCount} vendite)
+                  </>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="shrink-0 font-medium text-amber-700 hover:underline"
+              onClick={() => set('originalPrice', priceSuggestion.soldCount > 0 ? priceSuggestion.avgSold : priceSuggestion.avgOriginal)}
+            >
+              Usa {formatMoney(priceSuggestion.soldCount > 0 ? priceSuggestion.avgSold : priceSuggestion.avgOriginal)}
+            </button>
+          </div>
+        )}
         <Field label="Data di carico">
           <Input type="date" max={today} value={form.loadDate} onChange={(e) => set('loadDate', e.target.value)} />
         </Field>
