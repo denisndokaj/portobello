@@ -15,7 +15,7 @@ import {
   AlertTriangle,
   Coins,
 } from 'lucide-react'
-import { listArticles, listCategories, cancelSale, revertRitiro, deleteArticle, extendMandate, getArticleByCode } from '../../services'
+import { listArticles, listCategories, cancelSale, revertRitiro, deleteArticle, extendMandate, getArticleByCode, bulkSetCategory } from '../../services'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { toast } from '../../store/useToastStore'
 import { Input, Select } from '../../components/ui/Field'
@@ -48,6 +48,8 @@ export default function ItemList() {
   const [depositTarget, setDepositTarget] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [scannerOpen, setScannerOpen] = useState(false)
+  const [selected, setSelected] = useState({})
+  const [bulkCategory, setBulkCategory] = useState('')
   const [params, setParams] = useSearchParams()
   const navigate = useNavigate()
 
@@ -126,6 +128,30 @@ export default function ItemList() {
     reload()
   }
 
+  function toggleSelect(id) {
+    setSelected((s) => ({ ...s, [id]: !s[id] }))
+  }
+
+  function selectAllFiltered() {
+    setSelected(Object.fromEntries(rows.map((a) => [a.id, true])))
+  }
+
+  function clearSelection() {
+    setSelected({})
+  }
+
+  const selectedIds = Object.keys(selected).filter((id) => selected[id])
+
+  async function handleApplyBulkCategory() {
+    const category = bulkCategory.trim()
+    if (!category || selectedIds.length === 0) return
+    await bulkSetCategory(selectedIds, category)
+    toast(`Categoria assegnata a ${selectedIds.length} articoli`, 'success')
+    clearSelection()
+    setBulkCategory('')
+    reload()
+  }
+
   return (
     <div className="space-y-4 pb-10">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -199,6 +225,40 @@ export default function ItemList() {
         </div>
       </div>
 
+      {rows.length > 0 && (
+        <Card className="space-y-2 p-3">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <button className="font-medium text-brand-700 hover:underline" onClick={selectAllFiltered} type="button">
+              Seleziona tutti i {rows.length} risultati
+            </button>
+            {selectedIds.length > 0 && (
+              <button className="text-slate-500 hover:underline" onClick={clearSelection} type="button">
+                Deseleziona ({selectedIds.length})
+              </button>
+            )}
+          </div>
+          {selectedIds.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                list="category-options"
+                placeholder="Categoria da assegnare..."
+                className="w-56"
+                value={bulkCategory}
+                onChange={(e) => setBulkCategory(e.target.value)}
+              />
+              <datalist id="category-options">
+                {categories.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
+              <Button size="sm" disabled={!bulkCategory.trim()} onClick={handleApplyBulkCategory}>
+                Applica a {selectedIds.length} articoli
+              </Button>
+            </div>
+          )}
+        </Card>
+      )}
+
       {rows.length === 0 ? (
         <EmptyState icon={Package} title="Nessun articolo trovato" />
       ) : (
@@ -208,7 +268,13 @@ export default function ItemList() {
             return (
               <div key={a.id} className="px-4 py-3">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  <input
+                    type="checkbox"
+                    className="mt-1 size-4 shrink-0 rounded border-slate-300 text-brand-600"
+                    checked={!!selected[a.id]}
+                    onChange={() => toggleSelect(a.id)}
+                  />
+                  <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-slate-800">
                       <span className="mr-1.5 font-mono text-xs text-slate-400">{padCode(a.code)}</span>
                       {a.description}

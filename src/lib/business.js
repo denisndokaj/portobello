@@ -107,6 +107,17 @@ export function splitNet(totalNet, commissionPercent) {
   return { shopShare, vendorShare: round2(totalNet - shopShare) }
 }
 
+/** A vendor is flagged for manual review when its notes carry one of the
+ * markers the legacy-import conversion writes for uncertain data (a name
+ * split guessed from a compound full name, or a profile rebuilt from a
+ * stale reference with no matching registry entry). Derived from free text
+ * rather than a stored flag so it also catches imports already run before
+ * this check existed. */
+export function vendorNeedsReview(vendor) {
+  const notes = vendor?.notes || ''
+  return notes.includes('da verificare') || notes.includes('ricostruito automaticamente')
+}
+
 export function formatMoney(n) {
   return (Number(n) || 0).toLocaleString('it-IT', { style: 'currency', currency: 'EUR' })
 }

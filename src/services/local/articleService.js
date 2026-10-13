@@ -208,3 +208,11 @@ export async function markLabelPrinted(ids) {
   const now = new Date().toISOString()
   await db.articles.bulkUpdate(ids.map((id) => ({ key: Number(id), changes: { labelPrintedAt: now } })))
 }
+
+/** Assigns one category to many articles at once (e.g. after filtering a
+ * batch that has none) in a single transaction and a single log entry,
+ * instead of replaying updateArticle per row. */
+export async function bulkSetCategory(ids, category) {
+  await db.articles.bulkUpdate(ids.map((id) => ({ key: Number(id), changes: { category } })))
+  await addLog('articolo_modificato', `Categoria "${category}" assegnata in blocco a ${ids.length} articoli`, {})
+}

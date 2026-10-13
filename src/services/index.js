@@ -37,6 +37,7 @@ export const {
   setDeposit,
   clearDeposit,
   markLabelPrinted,
+  bulkSetCategory,
   getOrCreateInvoice,
   vendorsWithSalesInPeriod,
   generateMonthlyInvoices,

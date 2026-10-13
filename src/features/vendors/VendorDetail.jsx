@@ -13,7 +13,7 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog'
 import { Field, Input, Textarea } from '../../components/ui/Field'
 import VendorForm from './VendorForm'
 import QuickAddArticlesModal from './QuickAddArticlesModal'
-import { formatMoney, formatDate, padCode, getArticleStatus, getCurrentPrice, ARTICLE_STATUS_COLORS, ARTICLE_STATUS_LABELS, invoiceLabel } from '../../lib/business'
+import { formatMoney, formatDate, padCode, getArticleStatus, getCurrentPrice, ARTICLE_STATUS_COLORS, ARTICLE_STATUS_LABELS, invoiceLabel, vendorNeedsReview } from '../../lib/business'
 import { generateMandatePdf, DEFAULT_RECESSO_CLAUSE } from '../../lib/mandatePdf'
 import { generateReceiptPdf } from '../../lib/invoicePdf'
 import { buildWhatsAppLink, buildMailtoLink, vendorStatementMessage } from '../../lib/share'
@@ -64,8 +64,15 @@ export default function VendorDetail() {
         <button onClick={() => navigate('/venditori')} className="rounded-full p-1.5 text-slate-400 hover:bg-slate-100">
           <ArrowLeft size={18} />
         </button>
-        <h1 className="flex-1 truncate text-xl font-semibold text-slate-800">
-          {vendor.name} {vendor.surname}
+        <h1 className="flex flex-1 items-center gap-2 truncate text-xl font-semibold text-slate-800">
+          <span className="truncate">
+            {vendor.name} {vendor.surname}
+          </span>
+          {vendorNeedsReview(vendor) && (
+            <Badge tone="bg-amber-100 text-amber-800" className="shrink-0">
+              Da rivedere
+            </Badge>
+          )}
         </h1>
         <Button variant="secondary" size="sm" onClick={() => setEditOpen(true)}>
           <Pencil size={14} /> Modifica
@@ -74,6 +81,13 @@ export default function VendorDetail() {
           <Trash2 size={14} />
         </Button>
       </div>
+
+      {vendor.notes && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+          <p className="mb-1 font-medium uppercase tracking-wide text-amber-700">Note</p>
+          <p className="whitespace-pre-wrap">{vendor.notes}</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Totale venduto" value={formatMoney(stats.totalSold)} />
