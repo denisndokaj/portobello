@@ -11,6 +11,7 @@ const SellPage = lazy(() => import('./features/sell/SellPage'))
 const SettlementList = lazy(() => import('./features/settlements/SettlementList'))
 const LabelPrinter = lazy(() => import('./features/labels/LabelPrinter'))
 const Registro = lazy(() => import('./features/reports/Registro'))
+const NotesPage = lazy(() => import('./features/notes/NotesPage'))
 const SettingsPage = lazy(() => import('./features/settings/SettingsPage'))
 
 function PageFallback() {
@@ -56,6 +57,7 @@ export default function App() {
           <Route path="/distinte" element={<SettlementList />} />
           <Route path="/etichette" element={<LabelPrinter />} />
           <Route path="/registro" element={<Registro />} />
+          <Route path="/note" element={<NotesPage />} />
           <Route path="/impostazioni" element={<SettingsPage />} />
         </Route>
       </Routes>

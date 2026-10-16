@@ -17,6 +17,14 @@ db.version(1).stores({
   cashMovements: '++id, date, type',
 })
 
+// v2: added "notes" (promemoria divisi per sezione: prenotati, da
+// fotografare, da caricare, varie). Nuova tabella - va dichiarata in una
+// versione successiva, altrimenti chi ha già il database in versione 1 non
+// la riceve mai (Dexie crea le tabelle solo durante un upgrade di versione).
+db.version(2).stores({
+  notes: '++id, section, done, createdAt',
+})
+
 db.on('populate', async () => {
   await db.settings.put({ id: 1, ...DEFAULT_SETTINGS })
   await db.counters.put({

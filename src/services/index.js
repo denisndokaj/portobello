@@ -65,4 +65,8 @@ export const {
   setNextArticleCode,
   setNextInvoiceNumber,
   setNextUnnumberedNumber,
+  listNotes,
+  addNote,
+  toggleNoteDone,
+  deleteNote,
 } = impl

@@ -1,6 +1,6 @@
 import { db } from './db'
 
-const TABLES = ['vendors', 'articles', 'invoices', 'logs', 'settings', 'counters', 'cashMovements']
+const TABLES = ['vendors', 'articles', 'invoices', 'logs', 'settings', 'counters', 'cashMovements', 'notes']
 export const BACKUP_SNAPSHOT_KEY = 'portobello_backup_snapshots'
 export const MAX_SNAPSHOTS = 5
 

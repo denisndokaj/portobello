@@ -30,13 +30,14 @@ export async function updateSettings(patch) {
 }
 
 export async function resetAllData() {
-  await db.transaction('rw', db.vendors, db.articles, db.invoices, db.logs, db.counters, db.cashMovements, async () => {
+  await db.transaction('rw', db.vendors, db.articles, db.invoices, db.logs, db.counters, db.cashMovements, db.notes, async () => {
     await Promise.all([
       db.vendors.clear(),
       db.articles.clear(),
       db.invoices.clear(),
       db.logs.clear(),
       db.cashMovements.clear(),
+      db.notes.clear(),
       db.counters.put({ id: 1, nextArticleCode: 1, nextInvoiceNumber: 1, nextUnnumberedNumber: 1 }),
     ])
   })
