@@ -10,10 +10,10 @@ export async function listNotes() {
   })
 }
 
-export async function addNote(section, text, vendorId = null) {
+export async function addNote(section, text, vendorId = null, articleId = null) {
   const trimmed = (text || '').trim()
   if (!trimmed) return
-  return db.notes.add({ section, text: trimmed, vendorId: vendorId || null, done: false, createdAt: new Date().toISOString() })
+  return db.notes.add({ section, text: trimmed, vendorId: vendorId || null, articleId: articleId || null, done: false, createdAt: new Date().toISOString() })
 }
 
 export async function toggleNoteDone(id) {
@@ -24,4 +24,18 @@ export async function toggleNoteDone(id) {
 
 export async function deleteNote(id) {
   await db.notes.delete(id)
+}
+
+/** Add-or-remove toggle used by the quick-action button on an article row:
+ * one click files it under a note section, a second click (while the note
+ * is still open) takes it back out. Returns true if it ended up added. */
+export async function toggleArticleNote(section, articleId, text) {
+  const inSection = await db.notes.where('section').equals(section).toArray()
+  const existing = inSection.find((n) => n.articleId === articleId && !n.done)
+  if (existing) {
+    await db.notes.delete(existing.id)
+    return false
+  }
+  await addNote(section, text, null, articleId)
+  return true
 }

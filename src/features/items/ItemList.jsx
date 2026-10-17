@@ -4,6 +4,7 @@ import {
   Plus,
   Search,
   Camera,
+  ImagePlus,
   ShoppingCart,
   Undo2,
   RotateCcw,
@@ -16,7 +17,19 @@ import {
   Coins,
   CalendarRange,
 } from 'lucide-react'
-import { listArticles, listCategories, listVendors, cancelSale, revertRitiro, deleteArticle, extendMandate, getArticleByCode, bulkSetCategory } from '../../services'
+import {
+  listArticles,
+  listCategories,
+  listVendors,
+  cancelSale,
+  revertRitiro,
+  deleteArticle,
+  extendMandate,
+  getArticleByCode,
+  bulkSetCategory,
+  listNotes,
+  toggleArticleNote,
+} from '../../services'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { toast } from '../../store/useToastStore'
 import { Field, Input, Select } from '../../components/ui/Field'
@@ -41,6 +54,7 @@ export default function ItemList() {
   const [articles, setArticles] = useState([])
   const [categories, setCategories] = useState([])
   const [vendors, setVendors] = useState([])
+  const [photoArticleIds, setPhotoArticleIds] = useState(new Set())
   const [filters, setFilters] = useState({ code: '', text: '', vendorId: null, status: '', category: '', dateFrom: '', dateTo: '' })
   const [page, setPage] = useState(1)
   const [view, setView] = useState('tutti') // 'tutti' | 'scadenze' | 'movimenti'
@@ -61,6 +75,8 @@ export default function ItemList() {
     setArticles(await listArticles({}))
     setCategories(await listCategories())
     setVendors(await listVendors())
+    const notes = await listNotes()
+    setPhotoArticleIds(new Set(notes.filter((n) => n.section === 'fotografare' && !n.done && n.articleId != null).map((n) => n.articleId)))
   }
 
   useEffect(() => {
@@ -140,6 +156,12 @@ export default function ItemList() {
   async function handleExtend(article) {
     await extendMandate(article.id, 30)
     toast('Mandato prorogato di 30 giorni', 'success')
+    reload()
+  }
+
+  async function handleTogglePhoto(article) {
+    const added = await toggleArticleNote('fotografare', article.id, `#${padCode(article.code)} ${article.description}`)
+    toast(added ? 'Aggiunto a "Da fotografare"' : 'Rimosso da "Da fotografare"', 'success')
     reload()
   }
 
@@ -391,6 +413,12 @@ export default function ItemList() {
                   )}
                   <RowAction icon={Tag} label="Etichetta" onClick={() => navigate(`/etichette?code=${a.code}`)} />
                   <RowAction
+                    icon={ImagePlus}
+                    label={photoArticleIds.has(a.id) ? 'Nella lista foto' : 'Da fotografare'}
+                    onClick={() => handleTogglePhoto(a)}
+                    active={photoArticleIds.has(a.id)}
+                  />
+                  <RowAction
                     icon={Pencil}
                     label="Modifica"
                     onClick={() => {
@@ -439,12 +467,16 @@ export default function ItemList() {
   )
 }
 
-function RowAction({ icon: Icon, label, onClick, danger }) {
+function RowAction({ icon: Icon, label, onClick, danger, active }) {
   return (
     <button
       onClick={onClick}
       className={`flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium ${
-        danger ? 'border-red-200 text-red-600 hover:bg-red-50' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+        danger
+          ? 'border-red-200 text-red-600 hover:bg-red-50'
+          : active
+            ? 'border-brand-300 bg-brand-50 text-brand-700 hover:bg-brand-100'
+            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
       }`}
     >
       <Icon size={13} />

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { NotebookPen, Plus, Trash2 } from 'lucide-react'
-import { listNotes, addNote, toggleNoteDone, deleteNote, listVendors } from '../../services'
+import { listNotes, addNote, toggleNoteDone, deleteNote, listVendors, listArticles } from '../../services'
 import { toast } from '../../store/useToastStore'
 import Card, { CardHeader } from '../../components/ui/Card'
 import Button from '../../components/ui/Button'
 import { Input } from '../../components/ui/Field'
 import VendorPicker from '../../components/VendorPicker'
+import ItemForm from '../items/ItemForm'
 import { formatDate } from '../../lib/business'
 
 const SECTIONS = [
@@ -19,16 +20,26 @@ const SECTIONS = [
 export default function NotesPage() {
   const [notes, setNotes] = useState([])
   const [vendors, setVendors] = useState([])
+  const [articles, setArticles] = useState([])
+  const [editArticle, setEditArticle] = useState(null)
+  const [itemFormOpen, setItemFormOpen] = useState(false)
 
   async function reload() {
     setNotes(await listNotes())
     setVendors(await listVendors())
+    setArticles(await listArticles({}))
   }
   useEffect(() => {
     reload()
   }, [])
 
   const vendorMap = useMemo(() => Object.fromEntries(vendors.map((v) => [v.id, v])), [vendors])
+  const articleMap = useMemo(() => Object.fromEntries(articles.map((a) => [a.id, a])), [articles])
+
+  function openArticle(article) {
+    setEditArticle(article)
+    setItemFormOpen(true)
+  }
 
   return (
     <div className="space-y-4 pb-10">
@@ -37,14 +48,15 @@ export default function NotesPage() {
       </h1>
       <div className="grid gap-4 lg:grid-cols-2">
         {SECTIONS.map((s) => (
-          <NoteSection key={s.key} section={s} notes={notes.filter((n) => n.section === s.key)} vendorMap={vendorMap} onChange={reload} />
+          <NoteSection key={s.key} section={s} notes={notes.filter((n) => n.section === s.key)} vendorMap={vendorMap} articleMap={articleMap} onChange={reload} onOpenArticle={openArticle} />
         ))}
       </div>
+      <ItemForm open={itemFormOpen} onClose={() => setItemFormOpen(false)} article={editArticle} onSaved={reload} />
     </div>
   )
 }
 
-function NoteSection({ section, notes, vendorMap, onChange }) {
+function NoteSection({ section, notes, vendorMap, articleMap, onChange, onOpenArticle }) {
   const [text, setText] = useState('')
   const [vendorId, setVendorId] = useState(null)
   const openCount = notes.filter((n) => !n.done).length
@@ -95,11 +107,18 @@ function NoteSection({ section, notes, vendorMap, onChange }) {
         <div className="divide-y divide-slate-100">
           {notes.map((n) => {
             const vendor = n.vendorId ? vendorMap[n.vendorId] : null
+            const article = n.articleId ? articleMap[n.articleId] : null
             return (
               <div key={n.id} className="flex items-start gap-2 px-3 py-2">
                 <input type="checkbox" className="mt-0.5 size-4 shrink-0 rounded border-slate-300 text-brand-600" checked={!!n.done} onChange={() => handleToggle(n.id)} />
                 <div className="min-w-0 flex-1">
-                  <p className={`text-sm ${n.done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{n.text}</p>
+                  {article ? (
+                    <button type="button" onClick={() => onOpenArticle(article)} className={`text-left text-sm hover:underline ${n.done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                      {n.text}
+                    </button>
+                  ) : (
+                    <p className={`text-sm ${n.done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>{n.text}</p>
+                  )}
                   <p className="text-xs text-slate-400">
                     {formatDate(n.createdAt.slice(0, 10))}
                     {vendor && (

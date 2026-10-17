@@ -69,4 +69,5 @@ export const {
   addNote,
   toggleNoteDone,
   deleteNote,
+  toggleArticleNote,
 } = impl

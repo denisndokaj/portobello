@@ -22,6 +22,8 @@ export default function QuickAddArticlesModal({ open, onClose, vendor, onDone })
   const [saving, setSaving] = useState(false)
   const [allArticles, setAllArticles] = useState([])
   const [debouncedDescription, setDebouncedDescription] = useState('')
+  const [receiptFrom, setReceiptFrom] = useState(new Date().toISOString().slice(0, 10))
+  const [receiptTo, setReceiptTo] = useState(new Date().toISOString().slice(0, 10))
 
   useEffect(() => {
     if (open) listArticles({}).then(setAllArticles)
@@ -86,10 +88,12 @@ export default function QuickAddArticlesModal({ open, onClose, vendor, onDone })
     onClose()
   }
 
-  function handlePrintReceipt() {
-    if (session.length === 0) return
-    const doc = generateReceiptPdf(vendor, session, settings)
-    doc.save(`distinta-ricevimento-${vendor.surname}-${new Date().toISOString().slice(0, 10)}.pdf`)
+  async function handlePrintReceipt() {
+    const articles = await listArticles({ vendorId: vendor.id })
+    const loaded = articles.filter((a) => a.loadDate >= receiptFrom && a.loadDate <= receiptTo)
+    if (loaded.length === 0) return toast('Nessun articolo caricato in questo periodo', 'info')
+    const doc = generateReceiptPdf(vendor, loaded, settings, { from: receiptFrom, to: receiptTo })
+    doc.save(`distinta-ricevimento-${vendor.surname}-${receiptFrom}-${receiptTo}.pdf`)
   }
 
   const elements = { barcode: true, code: true, description: true, price: true, date: true, vendor: settings.hardware.showVendorOnLabel }
@@ -105,7 +109,7 @@ export default function QuickAddArticlesModal({ open, onClose, vendor, onDone })
           <Button variant="secondary" onClick={handleClose}>
             Chiudi
           </Button>
-          <Button variant="secondary" onClick={handlePrintReceipt} disabled={session.length === 0}>
+          <Button variant="secondary" onClick={handlePrintReceipt}>
             <FileDown size={16} /> Distinta di ricevimento
           </Button>
           <Button onClick={handlePrintAll} disabled={session.length === 0}>
@@ -157,6 +161,15 @@ export default function QuickAddArticlesModal({ open, onClose, vendor, onDone })
           <Plus size={16} /> Aggiungi e continua
         </Button>
       </form>
+
+      <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-slate-100 pt-3">
+        <Field label="Distinta: ricevuti dal" hint="Periodo usato per la distinta di ricevimento (non solo questa sessione)">
+          <Input type="date" value={receiptFrom} max={receiptTo} onChange={(e) => setReceiptFrom(e.target.value)} />
+        </Field>
+        <Field label="al">
+          <Input type="date" value={receiptTo} min={receiptFrom} max={today} onChange={(e) => setReceiptTo(e.target.value)} />
+        </Field>
+      </div>
 
       {session.length > 0 && (
         <div className="mt-4 border-t border-slate-100 pt-3">

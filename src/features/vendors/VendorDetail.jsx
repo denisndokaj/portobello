@@ -38,6 +38,8 @@ export default function VendorDetail() {
   const [itemFormOpen, setItemFormOpen] = useState(false)
   const [deleteArticleTarget, setDeleteArticleTarget] = useState(null)
   const [articleFilter, setArticleFilter] = useState('attivi') // 'attivi' | 'scaduti' | 'venduti' | 'tutti'
+  const [soldFrom, setSoldFrom] = useState('')
+  const [soldTo, setSoldTo] = useState('')
 
   function openArticle(article) {
     setEditArticle(article)
@@ -82,13 +84,15 @@ export default function VendorDetail() {
 
   const filteredArticles = useMemo(() => {
     if (articleFilter === 'tutti') return articles
-    if (articleFilter === 'venduti') return articles.filter((a) => a.status === 'venduto')
+    if (articleFilter === 'venduti') {
+      return articles.filter((a) => a.status === 'venduto' && (!soldFrom || a.soldDate >= soldFrom) && (!soldTo || a.soldDate <= soldTo))
+    }
     if (articleFilter === 'scaduti') return articles.filter((a) => getArticleStatus(a, settings).status === 'scaduto')
     return articles.filter((a) => {
       const st = getArticleStatus(a, settings).status
       return st === 'disponibile' || st === 'sconto'
     })
-  }, [articles, articleFilter, settings])
+  }, [articles, articleFilter, settings, soldFrom, soldTo])
 
   if (!vendor || !stats) return <p className="text-sm text-slate-400">Caricamento...</p>
 
@@ -169,6 +173,28 @@ export default function VendorDetail() {
               </Button>
             </div>
           </div>
+          {articleFilter === 'venduti' && (
+            <Card className="flex flex-wrap items-end gap-3 p-3">
+              <Field label="Venduti dal">
+                <Input type="date" value={soldFrom} max={soldTo || undefined} onChange={(e) => setSoldFrom(e.target.value)} />
+              </Field>
+              <Field label="Al">
+                <Input type="date" value={soldTo} min={soldFrom || undefined} onChange={(e) => setSoldTo(e.target.value)} />
+              </Field>
+              {(soldFrom || soldTo) && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setSoldFrom('')
+                    setSoldTo('')
+                  }}
+                >
+                  Azzera periodo
+                </Button>
+              )}
+            </Card>
+          )}
           <Card className="divide-y divide-slate-100 overflow-hidden">
             {filteredArticles.length === 0 && <p className="p-4 text-sm text-slate-400">Nessun articolo in questa categoria.</p>}
           {filteredArticles.map((a) => {
@@ -179,7 +205,10 @@ export default function VendorDetail() {
                   <p className="truncate text-sm font-medium text-slate-700">
                     <span className="font-mono text-xs text-slate-400">{padCode(a.code)}</span> {a.description}
                   </p>
-                  <p className="text-xs text-slate-400">Carico {formatDate(a.loadDate)}</p>
+                  <p className="text-xs text-slate-400">
+                    Carico {formatDate(a.loadDate)}
+                    {articleFilter === 'venduti' && a.soldDate && ` · Venduto ${formatDate(a.soldDate)}`}
+                  </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge tone={ARTICLE_STATUS_COLORS[st.status]}>{ARTICLE_STATUS_LABELS[st.status]}</Badge>
