@@ -52,6 +52,9 @@ body {
 /* Print layouts: receipts, labels, distinte. Each printable view wraps
    itself in .print-area and the rest of the app is hidden on print. */
 @media print {
+  body {
+    background: white;
+  }
   body * {
     visibility: hidden;
   }
@@ -64,6 +67,7 @@ body {
     inset: 0;
     margin: 0;
     padding: 0;
+    background: white;
   }
   .no-print {
     display: none !important;
