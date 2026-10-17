@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Tag, Printer, Download, Search } from 'lucide-react'
+import { Tag, Printer, Download, FileArchive, Search } from 'lucide-react'
 import { listArticles, listVendors, markLabelPrinted } from '../../services'
 import { useSettingsStore } from '../../store/useSettingsStore'
 import { toast } from '../../store/useToastStore'
@@ -11,6 +11,8 @@ import VendorPicker from '../../components/VendorPicker'
 import LabelSheet from './LabelSheet'
 import { padCode, formatMoney, formatDate, getCurrentPrice, LABEL_PRESETS } from '../../lib/business'
 import { downloadCSV } from '../../lib/exportUtils'
+import { triggerDownload } from '../../lib/backup'
+import { buildArticleLbx, buildLbxBundle } from '../../lib/lbxExport'
 
 const DEFAULT_ELEMENTS = { barcode: true, code: true, description: true, price: true, date: true, vendor: false }
 
@@ -68,6 +70,39 @@ export default function LabelPrinter() {
       await markLabelPrinted(selectedArticles.map((a) => a.id))
       reload()
     }, 50)
+  }
+
+  async function handleExportLbx() {
+    const rows = selectedArticles.length ? selectedArticles : filtered
+    if (rows.length === 0) return toast('Seleziona almeno un articolo', 'error')
+    const preset = LABEL_PRESETS[format]
+    const items = rows.map((a) => {
+      const vendor = vendorMap[a.vendorId]
+      const price = priceMode === 'full' ? a.originalPrice : getCurrentPrice(a, settings)
+      return {
+        widthMm: preset.widthMm,
+        heightMm: preset.heightMm,
+        shopName: settings.shop.name,
+        code: a.code,
+        description: a.description,
+        price: formatMoney(price),
+        date: formatDate(a.loadDate),
+        vendorName: elements.vendor && vendor ? `${vendor.name} ${vendor.surname}` : '',
+        filename: `etichetta-${padCode(a.code)}.lbx`,
+      }
+    })
+    try {
+      if (items.length === 1) {
+        const blob = await buildArticleLbx(items[0])
+        triggerDownload(blob, items[0].filename)
+      } else {
+        const zipBlob = await buildLbxBundle(items)
+        triggerDownload(zipBlob, `etichette-ptouch-${new Date().toISOString().slice(0, 10)}.zip`)
+      }
+      toast(`${items.length} etichette .lbx esportate`, 'success')
+    } catch (err) {
+      toast(err.message || "Errore durante l'esportazione .lbx", 'error')
+    }
   }
 
   function exportForExternalSoftware() {
@@ -130,6 +165,9 @@ export default function LabelPrinter() {
           </Button>
           <Button variant="secondary" size="sm" onClick={exportForExternalSoftware}>
             <Download size={14} /> Esporta CSV
+          </Button>
+          <Button variant="secondary" size="sm" onClick={handleExportLbx}>
+            <FileArchive size={14} /> Esporta .lbx (P-touch)
           </Button>
           <Button size="sm" className="ml-auto" onClick={handlePrint}>
             <Printer size={14} /> Stampa {selectedArticles.length} etichette
